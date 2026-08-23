@@ -2,7 +2,7 @@ import { and, desc, eq, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { chatMessages, deliveryOrders, drivers, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
-import { validateDriverStatusUpdate } from "./delivery";
+import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -48,7 +48,7 @@ export async function getDeliveryOrderWithEventsForUser(reference: string, userI
 
 export async function getDriverByUserId(userId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1))[0]; }
 
-export async function getNewOrdersForDriver() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.status, "new")).orderBy(desc(deliveryOrders.createdAt)); }
+export async function getNewOrdersForDriver() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const orders = await db.select().from(deliveryOrders).where(eq(deliveryOrders.status, "new")).orderBy(desc(deliveryOrders.createdAt)); return orders.filter(canEnterDriverOperations); }
 
 export async function getOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.driverId, driverId)).orderBy(desc(deliveryOrders.createdAt)); }
 
@@ -60,6 +60,7 @@ export async function acceptOrderForDriver(orderId: number, driverId: number, ac
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
   if (!target || target.status !== "new") throw new Error("هذا الطلب لم يعد متاحًا.");
+  if (!canEnterDriverOperations(target)) throw new Error("لا يمكن بدء التنفيذ قبل اعتماد الدفع.");
   await db.update(deliveryOrders).set({ driverId, status: "assigned", acceptedAt: new Date() }).where(and(eq(deliveryOrders.id, orderId), eq(deliveryOrders.status, "new")));
   await db.update(drivers).set({ availability: "busy" }).where(eq(drivers.id, driverId));
   await db.insert(orderEvents).values({ orderId, eventType: "assigned", status: "assigned", note: "تم قبول الطلب من المندوب", actorUserId });
@@ -71,6 +72,7 @@ export async function updateDriverOrderStatus(orderId: number, driverId: number,
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
   if (!target) throw new Error("لا يمكنك تحديث هذا الطلب.");
+  if (!canEnterDriverOperations(target)) throw new Error("لا يمكن تحديث الطلب قبل اعتماد الدفع.");
   validateDriverStatusUpdate({ assignedDriverId: target.driverId, actingDriverId: driverId, currentStatus: target.status, nextStatus: status });
   const dateField = { driver_arrived: { driverArrivedAt: new Date() }, picked_up: { pickedUpAt: new Date() }, in_delivery: { deliveryStartedAt: new Date() }, delivered: { deliveredAt: new Date() } }[status];
   await db.update(deliveryOrders).set({ status, ...dateField }).where(eq(deliveryOrders.id, orderId));
@@ -178,4 +180,28 @@ export async function sendDriverCustomerMessage(orderId: number, driverUserId: n
   await db.insert(chatMessages).values({ orderId, senderUserId: driverUserId, recipientUserId: order.userId, channel: "driver", body });
   await db.insert(notifications).values({ userId: order.userId, orderId, title: "رسالة من المندوب", body });
   return getDriverChatForDriver(orderId, driverUserId);
+}
+
+export async function getAdminPaymentOrders() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  return db.select().from(deliveryOrders).where(eq(deliveryOrders.paymentMethod, "vodafone_cash")).orderBy(desc(deliveryOrders.updatedAt));
+}
+
+export async function verifyVodafonePayment(orderId: number, adminUserId: number, status: "paid" | "failed") {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!order || order.paymentMethod !== "vodafone_cash") throw new Error("طلب الدفع غير موجود.");
+  await db.update(deliveryOrders).set({ paymentStatus: status }).where(eq(deliveryOrders.id, orderId));
+  await db.insert(notifications).values({ userId: order.userId, orderId, title: status === "paid" ? "تم تأكيد الدفع" : "تعذر تأكيد الدفع", body: status === "paid" ? "تمت مطابقة تحويل Vodafone Cash، وسيستمر تجهيز طلبك." : "يرجى مراجعة رقم العملية والتواصل مع الدعم." });
+  await db.insert(orderEvents).values({ orderId, eventType: `payment_${status}`, status: order.status, note: status === "paid" ? "تم اعتماد دفع Vodafone Cash" : "تم رفض دفع Vodafone Cash", actorUserId: adminUserId });
+  return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+}
+
+export async function attachVodafonePaymentReceipt(orderId: number, userId: number, receiptUrl: string) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!order) throw new Error("لا يمكنك إرفاق إيصال بهذا الطلب.");
+  assertPaymentReceiptAccess(order, userId);
+  await db.update(deliveryOrders).set({ paymentReceiptUrl: receiptUrl, paymentStatus: "verifying" }).where(eq(deliveryOrders.id, orderId));
+  return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
 }

@@ -43,5 +43,10 @@ describe("operational roles", () => {
     await expect(caller.driver.updateStatus({ orderId: 1, status: "driver_arrived" })).rejects.toThrow("لا يوجد ملف مندوب");
     await expect(caller.driver.chat({ orderId: 1 })).rejects.toThrow("لا يمكنك عرض رسائل هذا الطلب");
     await expect(caller.driver.sendChat({ orderId: 1, body: "رسالة اختبار" })).rejects.toThrow("لا يمكنك مراسلة هذا العميل");
+  }, 15000);
+
+  it("rejects manual payment verification for a non-admin account", async () => {
+    const caller = appRouter.createCaller(makeContext(ordinaryUser));
+    await expect(caller.admin.verifyPayment({ orderId: 1, status: "paid" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

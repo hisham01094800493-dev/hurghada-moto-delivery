@@ -21,9 +21,12 @@ export const deliveryOrderInput = z
     itemCount: z.number().int().min(1).max(50).default(1),
     contactless: z.boolean().default(false),
     healthNotes: z.string().trim().max(500).optional(),
+    paymentMethod: z.enum(["cash", "vodafone_cash"]).default("cash"),
+    paymentReference: z.string().trim().regex(/^[A-Za-z0-9_-]{6,64}$/, "رقم العملية غير صالح.").optional(),
   })
   .superRefine((value, ctx) => {
     if (Number.isNaN(new Date(value.requestedFor).getTime())) ctx.addIssue({ code: "custom", path: ["requestedFor"], message: "وقت الطلب غير صالح." });
+    if (value.paymentMethod === "vodafone_cash" && !value.paymentReference) ctx.addIssue({ code: "custom", path: ["paymentReference"], message: "أدخل رقم عملية Vodafone Cash بعد التحويل." });
     if (value.serviceType !== "person") {
       if (!value.recipientName || value.recipientName.length < 2) ctx.addIssue({ code: "custom", path: ["recipientName"], message: "أدخل اسم المستلم." });
       if (!value.recipientPhone || value.recipientPhone.length < 8) ctx.addIssue({ code: "custom", path: ["recipientPhone"], message: "أدخل هاتف المستلم." });
@@ -65,4 +68,12 @@ export function assertOperationalStatusTransition(currentStatus: keyof typeof al
 export function validateDriverStatusUpdate(input: { assignedDriverId: number | null; actingDriverId: number; currentStatus: keyof typeof allowedStatusTransitions; nextStatus: string }) {
   if (input.assignedDriverId !== input.actingDriverId) throw new Error("لا يمكنك تحديث هذا الطلب.");
   assertOperationalStatusTransition(input.currentStatus, input.nextStatus);
+}
+
+export function canEnterDriverOperations(order: { paymentMethod: "cash" | "vodafone_cash"; paymentStatus: "pending" | "verifying" | "paid" | "failed" }) {
+  return order.paymentMethod === "cash" || order.paymentStatus === "paid";
+}
+
+export function assertPaymentReceiptAccess(order: { userId: number; paymentMethod: "cash" | "vodafone_cash" }, requestUserId: number) {
+  if (order.userId !== requestUserId || order.paymentMethod !== "vodafone_cash") throw new Error("لا يمكنك إرفاق إيصال بهذا الطلب.");
 }

@@ -11,7 +11,7 @@ vi.mock("drizzle-orm/mysql2", () => ({ drizzle: vi.fn(() => fakeDb) }));
 import { updateDriverOrderStatus } from "./db";
 
 function mockAssignedOrder(status: "assigned" | "driver_arrived" | "picked_up" | "in_delivery") {
-  fakeDb.select.mockReturnValue({ from: () => ({ where: () => ({ limit: async () => [{ id: 77, driverId: 9, userId: 4, status, estimatedFee: 50 }] }) }) });
+  fakeDb.select.mockReturnValue({ from: () => ({ where: () => ({ limit: async () => [{ id: 77, driverId: 9, userId: 4, status, estimatedFee: 50, paymentMethod: "cash", paymentStatus: "pending" }] }) }) });
 }
 
 describe("updateDriverOrderStatus operational path", () => {
