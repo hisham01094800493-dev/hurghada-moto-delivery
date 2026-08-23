@@ -1,0 +1,19 @@
+{
+  "name": "مشوار الغردقة",
+  "short_name": "مشوار",
+  "description": "خدمة توصيل بالموتوسيكل للأفراد والطلبات داخل الغردقة.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fbfc",
+  "theme_color": "#082538",
+  "icons": [
+    {
+      "src": "/manus-storage/hurghada-moto-app-icon_235868ff.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

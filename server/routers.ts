@@ -1,28 +1,43 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { createDeliveryOrder, getDeliveryOrdersForUser } from "./db";
+import { deliveryOrderInput, estimateDeliveryFee, makeOrderReference } from "./delivery";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  orders: router({
+    create: protectedProcedure.input(deliveryOrderInput).mutation(async ({ ctx, input }) => {
+      const estimatedFee = estimateDeliveryFee(input.serviceType, input.requestedFor);
+      const order = await createDeliveryOrder({
+        reference: makeOrderReference(),
+        userId: ctx.user.id,
+        serviceType: input.serviceType,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        pickupAddress: input.pickupAddress,
+        destinationAddress: input.destinationAddress,
+        requestedFor: new Date(input.requestedFor),
+        recipientName: input.recipientName || null,
+        recipientPhone: input.recipientPhone || null,
+        packageDescription: input.packageDescription || null,
+        contactless: input.contactless ? 1 : 0,
+        healthNotes: input.healthNotes || null,
+        estimatedFee,
+      });
+      return order;
+    }),
+    mine: protectedProcedure.query(({ ctx }) => getDeliveryOrdersForUser(ctx.user.id)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
