@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { chatMessages, deliveryOrders, drivers, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
+import { buildDailyDeliveryReport } from "../shared/reporting";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -85,6 +86,12 @@ export async function updateDriverOrderStatus(orderId: number, driverId: number,
   const notificationTitles = { driver_arrived: "المندوب وصل", picked_up: "تم استلام طلبك", in_delivery: "طلبك في الطريق", delivered: "تم تسليم طلبك" } as const;
   await db.insert(notifications).values({ userId: target.userId, orderId, title: notificationTitles[status], body: notes[status] });
   return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+}
+
+export async function getAdminDailyReport(targetDate = new Date()) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const orders = await db.select({ status: deliveryOrders.status, deliveredAt: deliveryOrders.deliveredAt, estimatedFee: deliveryOrders.estimatedFee, serviceType: deliveryOrders.serviceType, paymentMethod: deliveryOrders.paymentMethod }).from(deliveryOrders);
+  return buildDailyDeliveryReport(orders, targetDate);
 }
 
 export async function getAdminSummary() {
