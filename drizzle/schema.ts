@@ -96,6 +96,17 @@ export const orderEvents = mysqlTable("order_events", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const driverOrderInvitations = mysqlTable("driver_order_invitations", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().references(() => deliveryOrders.id),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  status: mysqlEnum("status", ["pending", "accepted", "rejected", "expired", "cancelled"]).default("pending").notNull(),
+  distanceMeters: int("distanceMeters").notNull().default(0),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  respondedAt: timestamp("respondedAt"),
+});
+
 export const chatMessages = mysqlTable("chat_messages", {
   id: int("id").autoincrement().primaryKey(),
   orderId: int("orderId").references(() => deliveryOrders.id),
@@ -128,5 +139,6 @@ export type Driver = typeof drivers.$inferSelect;
 export type DeliveryOrder = typeof deliveryOrders.$inferSelect;
 export type InsertDeliveryOrder = typeof deliveryOrders.$inferInsert;
 export type OrderEvent = typeof orderEvents.$inferSelect;
+export type DriverOrderInvitation = typeof driverOrderInvitations.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type AppNotification = typeof notifications.$inferSelect;
