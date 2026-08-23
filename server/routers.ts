@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { acceptOrderForDriver, attachVodafonePaymentReceipt, createDeliveryOrder, createDriverForUser, getAdminDailyReport, getAdminDrivers, getAdminOrders, getAdminPaymentOrders, getAdminSummary, getAdminSupportInbox, getAdminUsers, getDeliveryOrderWithEventsForUser, getDeliveryOrdersForUser, getDriverByUserId, getDriverChatForCustomer, getDriverChatForDriver, getNewOrdersForDriver, getNotificationsForUser, getOrdersForDriver, getProfileWithAddresses, getSupportConversation, markCustomerDriverChatRead, rejectOrderInvitation, markDriverChatRead, markSupportMessagesRead, saveAddressForUser, sendAdminSupportReply, sendCustomerDriverMessage, sendDriverCustomerMessage, sendSupportMessage, setDriverAdminStatus, updateContactForUser, updateDriverAvailability, updateDriverLocation, updateDriverOrderStatus, verifyVodafonePayment } from "./db";
+import { acceptOrderForDriver, attachVodafonePaymentReceipt, createDeliveryOrder, createDriverForUser, getAdminDailyReport, getAdminDrivers, getAdminOrders, getAdminPaymentOrders, getAdminSummary, getAdminSupportInbox, getAdminUsers, getDeliveryOrderWithEventsForUser, getDeliveryOrdersForUser, getDriverByUserId, getDriverChatForCustomer, getDriverChatForDriver, getNewOrdersForDriver, getNotificationsForUser, getOrdersForDriver, getUnreadMessageCounts, getProfileWithAddresses, getSupportConversation, markCustomerDriverChatRead, rejectOrderInvitation, markDriverChatRead, markSupportMessagesRead, saveAddressForUser, sendAdminSupportReply, sendCustomerDriverMessage, sendDriverCustomerMessage, sendSupportMessage, setDriverAdminStatus, updateContactForUser, updateDriverAvailability, updateDriverLocation, updateDriverOrderStatus, verifyVodafonePayment } from "./db";
 import { buildOperationalQuote, deliveryOrderInput, makeOrderReference } from "./delivery";
 import { getVodafoneCashInstructions } from "./payment";
 import { storagePut } from "./storage";
@@ -55,6 +55,7 @@ export const appRouter = router({
     send: protectedProcedure.input(z.object({ body: z.string().trim().min(1).max(1200), locationLabel: z.string().trim().max(240).optional(), locationLatitude: z.number().min(-90).max(90).optional(), locationLongitude: z.number().min(-180).max(180).optional() })).mutation(({ ctx, input }) => sendSupportMessage({ senderUserId: ctx.user.id, ...input })),
     notifications: protectedProcedure.query(({ ctx }) => getNotificationsForUser(ctx.user.id)),
     markRead: protectedProcedure.mutation(({ ctx }) => markSupportMessagesRead(ctx.user.id)),
+    unreadCounts: protectedProcedure.query(({ ctx }) => getUnreadMessageCounts(ctx.user.id)),
   }),
 });
 

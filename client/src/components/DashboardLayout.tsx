@@ -20,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
+import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users, type LucideIcon } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -115,6 +116,7 @@ function DashboardLayoutContent({
   title,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const unreadCounts = trpc.support.unreadCounts.useQuery(undefined, { enabled: Boolean(user), refetchInterval: 10000 });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -201,7 +203,7 @@ function DashboardLayoutContent({
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
                       />
-                      <span>{item.label}</span>
+                      <span className="flex min-w-0 flex-1 items-center justify-between gap-2"><span>{item.label}</span>{item.label.includes("الدعم") && Boolean(unreadCounts.data?.support) && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-700">{unreadCounts.data?.support}</span>}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

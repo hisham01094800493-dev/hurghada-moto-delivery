@@ -203,6 +203,12 @@ export async function sendAdminSupportReply(input: { adminUserId: number; recipi
   return getAdminSupportInbox(input.adminUserId);
 }
 
+export async function getUnreadMessageCounts(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const messages = await db.select({ channel: chatMessages.channel }).from(chatMessages).where(and(eq(chatMessages.recipientUserId, userId), eq(chatMessages.status, "sent")));
+  return { support: messages.filter((message) => message.channel === "support").length, driver: messages.filter((message) => message.channel === "driver").length, total: messages.length };
+}
+
 export async function getNotificationsForUser(userId: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
