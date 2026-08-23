@@ -171,6 +171,50 @@ export async function updateContactForUser(userId: number, name: string, phone: 
   return getProfileWithAddresses(userId);
 }
 
+async function insertAudioMessage(input: { orderId?: number; senderUserId: number; recipientUserId: number; channel: "support" | "driver"; body?: string; attachmentUrl: string; attachmentName: string; audioDurationSeconds: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.insert(chatMessages).values({ orderId: input.orderId ?? null, senderUserId: input.senderUserId, recipientUserId: input.recipientUserId, channel: input.channel, messageType: "audio", body: input.body || null, attachmentUrl: input.attachmentUrl, attachmentName: input.attachmentName, audioDurationSeconds: input.audioDurationSeconds });
+  await db.insert(notifications).values({ userId: input.recipientUserId, orderId: input.orderId ?? null, title: "رسالة صوتية جديدة", body: "أرسل لك الطرف الآخر رسالة صوتية." });
+  return true;
+}
+
+export async function sendSupportAudio(senderUserId: number, attachmentUrl: string, attachmentName: string, audioDurationSeconds: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const admin = (await db.select().from(users).where(eq(users.role, "admin")).limit(1))[0]; if (!admin) throw new Error("لا يتوفر حساب دعم حاليًا.");
+  await insertAudioMessage({ senderUserId, recipientUserId: admin.id, channel: "support", attachmentUrl, attachmentName, audioDurationSeconds });
+  return getSupportConversation(senderUserId);
+}
+
+export async function sendCustomerDriverAudio(reference: string, customerUserId: number, attachmentUrl: string, attachmentName: string, audioDurationSeconds: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0]; if (!order || order.userId !== customerUserId || !order.driverId) throw new Error("لم يُعيّن مندوب لهذا الطلب بعد.");
+  const driver = await getDriverById(order.driverId); if (!driver) throw new Error("بيانات المندوب غير متاحة.");
+  await insertAudioMessage({ orderId: order.id, senderUserId: customerUserId, recipientUserId: driver.userId, channel: "driver", attachmentUrl, attachmentName, audioDurationSeconds });
+  return getDriverChatForCustomer(reference, customerUserId);
+}
+
+export async function sendDriverCustomerAudio(orderId: number, driverUserId: number, attachmentUrl: string, attachmentName: string, audioDurationSeconds: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(driverUserId); const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0]; if (!driver || !order || order.driverId !== driver.id) throw new Error("لا يمكنك مراسلة هذا العميل.");
+  await insertAudioMessage({ orderId, senderUserId: driverUserId, recipientUserId: order.userId, channel: "driver", attachmentUrl, attachmentName, audioDurationSeconds });
+  return getDriverChatForDriver(orderId, driverUserId);
+}
+
+export async function createLiveLocationMessage(orderId: number, senderUserId: number, latitude: number, longitude: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0]; const senderDriver = await getDriverByUserId(senderUserId); if (!order || (order.userId !== senderUserId && (!senderDriver || senderDriver.id !== order.driverId))) throw new Error("لا يمكنك مشاركة موقعك في هذا الطلب.");
+  const driver = order.driverId ? await getDriverById(order.driverId) : undefined; const recipientUserId = order.userId === senderUserId ? driver?.userId : order.userId; if (!recipientUserId) throw new Error("لا يوجد طرف آخر لمشاركة الموقع معه.");
+  const inserted = await db.insert(chatMessages).values({ orderId, senderUserId, recipientUserId, channel: "driver", messageType: "location", body: "مشاركة موقع مباشر", locationLabel: "موقع مباشر", locationLatitude: latitude, locationLongitude: longitude, locationIsLive: 1 });
+  await db.insert(notifications).values({ userId: recipientUserId, orderId, title: "تمت مشاركة موقع مباشر", body: "شارك الطرف الآخر موقعه الجغرافي معك." });
+  return inserted[0].insertId;
+}
+
+export async function updateLiveLocation(messageId: number, senderUserId: number, latitude?: number, longitude?: number, isLive = true) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const message = (await db.select().from(chatMessages).where(eq(chatMessages.id, messageId)).limit(1))[0]; if (!message || message.senderUserId !== senderUserId || message.messageType !== "location") throw new Error("لا يمكنك تحديث مشاركة الموقع هذه.");
+  const locationPatch = { locationIsLive: isLive ? 1 : 0, locationLatitude: typeof latitude === "number" ? latitude : message.locationLatitude, locationLongitude: typeof longitude === "number" ? longitude : message.locationLongitude }; await db.update(chatMessages).set(locationPatch).where(eq(chatMessages.id, messageId)); return true;
+}
+
 export async function getSupportConversation(userId: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   return db.select().from(chatMessages).where(and(eq(chatMessages.channel, "support"), or(eq(chatMessages.senderUserId, userId), eq(chatMessages.recipientUserId, userId)))).orderBy(chatMessages.createdAt);
