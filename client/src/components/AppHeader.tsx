@@ -26,13 +26,13 @@ export default function AppHeader() {
         </nav>
         <div className="flex items-center gap-2">
           {!loading && (isAuthenticated ? (
-            <Link href="/my-orders" className="hidden items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white no-underline sm:flex">
+            <Link href="/profile" className="hidden items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white no-underline sm:flex">
               <PackageCheck className="h-4 w-4" />
               <span>{user?.name?.split(" ")[0] || "طلباتي"}</span>
             </Link>
           ) : (
             <Button onClick={() => startLogin()} className="rounded-xl bg-slate-950 px-4 font-bold hover:bg-slate-800">
-              <LogIn className="ml-2 h-4 w-4" /> تسجيل الدخول
+              <LogIn className="ml-2 h-4 w-4" /> دخول سريع / إنشاء حساب
             </Button>
           ))}
           <Link href="/my-orders" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-800 md:hidden" aria-label="طلباتي">

@@ -115,6 +115,21 @@ export async function rejectOrderInvitation(orderId: number, driverId: number) {
   return { success: true } as const;
 }
 
+export async function cancelOrderForCustomer(reference: string, customerUserId: number, reason?: string) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
+  if (!target || target.userId !== customerUserId) throw new Error("لا يمكنك إلغاء هذا الطلب.");
+  if (!["new", "assigned", "driver_arrived"].includes(target.status)) throw new Error("لا يمكن إلغاء الطلب بعد استلامه أو بدء التوصيل. تواصل مع الدعم للمساعدة.");
+  const cancellationReason = reason?.trim().slice(0, 500) || "تم الإلغاء من العميل";
+  const updated = await db.update(deliveryOrders).set({ status: "cancelled", cancelledAt: new Date(), cancellationReason }).where(and(eq(deliveryOrders.id, target.id), inArray(deliveryOrders.status, ["new", "assigned", "driver_arrived"]))) as any;
+  if (!updated[0]?.affectedRows) throw new Error("تعذر إلغاء الطلب؛ ربما تغيرت حالته.");
+  await db.update(driverOrderInvitations).set({ status: "cancelled", respondedAt: new Date() }).where(and(eq(driverOrderInvitations.orderId, target.id), eq(driverOrderInvitations.status, "pending")));
+  if (target.driverId) { const driver = await getDriverById(target.driverId); if (driver) { await db.update(drivers).set({ availability: "online" }).where(eq(drivers.id, driver.id)); await db.insert(notifications).values({ userId: driver.userId, orderId: target.id, title: "تم إلغاء الطلب", body: `ألغى العميل الطلب ${target.reference}.` }); } }
+  await db.insert(orderEvents).values({ orderId: target.id, eventType: "cancelled", status: "cancelled", note: cancellationReason, actorUserId: customerUserId });
+  await db.insert(notifications).values({ userId: customerUserId, orderId: target.id, title: "تم إلغاء الطلب", body: "تم إلغاء الطلب بنجاح." });
+  return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, target.id)).limit(1))[0];
+}
+
 export async function updateDriverOrderStatus(orderId: number, driverId: number, actorUserId: number, status: "driver_arrived" | "picked_up" | "in_delivery" | "delivered") {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
@@ -212,7 +227,7 @@ export async function createLiveLocationMessage(orderId: number, senderUserId: n
 export async function updateLiveLocation(messageId: number, senderUserId: number, latitude?: number, longitude?: number, isLive = true) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const message = (await db.select().from(chatMessages).where(eq(chatMessages.id, messageId)).limit(1))[0]; if (!message || message.senderUserId !== senderUserId || message.messageType !== "location") throw new Error("لا يمكنك تحديث مشاركة الموقع هذه.");
-  const locationPatch = { locationIsLive: isLive ? 1 : 0, locationLatitude: typeof latitude === "number" ? latitude : message.locationLatitude, locationLongitude: typeof longitude === "number" ? longitude : message.locationLongitude }; await db.update(chatMessages).set(locationPatch).where(eq(chatMessages.id, messageId)); return true;
+  const wasLive = message.locationIsLive === 1; const locationPatch = { locationIsLive: isLive ? 1 : 0, locationLatitude: typeof latitude === "number" ? latitude : message.locationLatitude, locationLongitude: typeof longitude === "number" ? longitude : message.locationLongitude }; await db.update(chatMessages).set(locationPatch).where(eq(chatMessages.id, messageId)); if (!isLive && wasLive) { const senderDriver = await getDriverByUserId(senderUserId); const actorLabel = senderDriver ? "المندوب" : "العميل"; const stopMessage = `أوقف ${actorLabel} مشاركة الموقع المباشر.`; await db.insert(chatMessages).values({ orderId: message.orderId, senderUserId, recipientUserId: message.recipientUserId, channel: "driver", messageType: "system", body: stopMessage, locationLabel: "إيقاف مشاركة الموقع" }); await db.insert(notifications).values({ userId: message.recipientUserId, orderId: message.orderId, title: "توقفت مشاركة الموقع المباشر", body: stopMessage }); } return true;
 }
 
 export async function getSupportConversation(userId: number) {

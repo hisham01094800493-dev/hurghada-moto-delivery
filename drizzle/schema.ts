@@ -113,7 +113,7 @@ export const chatMessages = mysqlTable("chat_messages", {
   senderUserId: int("senderUserId").notNull().references(() => users.id),
   recipientUserId: int("recipientUserId").notNull().references(() => users.id),
   channel: mysqlEnum("channel", ["support", "driver"]).notNull().default("support"),
-  messageType: mysqlEnum("messageType", ["text", "audio", "location"]).notNull().default("text"),
+  messageType: mysqlEnum("messageType", ["text", "audio", "location", "system"]).notNull().default("text"),
   body: text("body"),
   audioDurationSeconds: int("audioDurationSeconds"),
   locationLabel: varchar("locationLabel", { length: 240 }),

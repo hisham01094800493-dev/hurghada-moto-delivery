@@ -22,6 +22,7 @@ function Router() {
       <Route path="/book/parcel" component={Booking} />
       <Route path="/my-orders" component={MyOrders} />
       <Route path="/profile" component={Profile} />
+      <Route path="/settings" component={Profile} />
       <Route path="/support" component={Support} />
       <Route path="/track/:reference" component={TrackOrder} />
       <Route path="/driver" component={DriverDashboard} />

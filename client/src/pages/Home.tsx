@@ -1,7 +1,8 @@
 import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, BadgeCheck, Bike, Clock3, LocateFixed, MapPinned, Package, Route, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Bike, Clock3, LogIn, LocateFixed, MapPinned, Package, Route, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { Link } from "wouter";
 
 const serviceCards = [
@@ -57,6 +58,7 @@ export default function Home() {
               <a href="#services" className="mt-9 inline-flex items-center gap-2 rounded-xl bg-[#082538] px-6 py-4 text-sm font-extrabold text-white no-underline shadow-[0_16px_32px_rgba(8,37,56,.22)] transition hover:-translate-y-0.5 hover:bg-[#103a52]">
                 ابدأ طلبًا الآن <ArrowLeft className="h-4 w-4" />
               </a>
+              {!isAuthenticated && <button type="button" onClick={() => startLogin()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm font-extrabold text-[#082538] shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:text-teal-700"><LogIn className="h-4 w-4 text-teal-700" /> إنشاء حساب سريع أو تسجيل الدخول</button>}
             </div>
             <div className="relative mx-auto w-full max-w-[460px]">
               <div className="rounded-[2.3rem] border-[9px] border-[#082538] bg-[#072130] p-4 shadow-[0_32px_70px_rgba(8,37,56,.32)]">

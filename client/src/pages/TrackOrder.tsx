@@ -6,7 +6,7 @@ import { audioExtension, blobToBase64 } from "@/lib/media";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { estimateDriverArrivalMinutes } from "@shared/eta";
-import { ArrowRight, Bike, CheckCircle2, CircleDashed, Clock3, MapPin, MessageCircle, Package, Phone, Route, Send, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, Bike, CheckCircle2, CircleDashed, Clock3, MapPin, MessageCircle, Package, Phone, Route, Send, ShieldCheck, UserRound, Info } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Link, useRoute } from "wouter";
