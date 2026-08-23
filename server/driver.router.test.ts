@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./db")>();
-  return { ...actual, getDriverByUserId: vi.fn(), updateDriverOrderStatus: vi.fn() };
+  return { ...actual, acceptOrderForDriver: vi.fn(), getDriverByUserId: vi.fn(), updateDriverOrderStatus: vi.fn() };
 });
 
-import { getDriverByUserId, updateDriverOrderStatus } from "./db";
+import { acceptOrderForDriver, getDriverByUserId, updateDriverOrderStatus } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -19,6 +19,14 @@ function makeDriverContext(): TrpcContext {
 
 describe("driver updateStatus router", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("requires the driver approval action before assigning the order", async () => {
+    vi.mocked(getDriverByUserId).mockResolvedValue({ id: 9 } as Awaited<ReturnType<typeof getDriverByUserId>>);
+    vi.mocked(acceptOrderForDriver).mockResolvedValue({ id: 777, status: "assigned", driverId: 9 } as never);
+    const caller = appRouter.createCaller(makeDriverContext());
+    await caller.driver.accept({ orderId: 777 });
+    expect(acceptOrderForDriver).toHaveBeenCalledWith(777, 9, 42);
+  });
 
   it("propagates a rejected operational transition through the actual tRPC procedure", async () => {
     vi.mocked(getDriverByUserId).mockResolvedValue({ id: 9 } as Awaited<ReturnType<typeof getDriverByUserId>>);

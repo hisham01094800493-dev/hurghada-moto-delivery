@@ -6,7 +6,7 @@ vi.mock("drizzle-orm/mysql2", () => ({ drizzle: vi.fn(() => fakeDb) }));
 import { createLiveLocationMessage, sendCustomerDriverAudio, updateLiveLocation } from "./db";
 
 describe("chat media access boundaries", () => {
-  beforeEach(() => { process.env.DATABASE_URL = "mysql://test"; vi.clearAllMocks(); fakeDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn() }) }); });
+  beforeEach(() => { process.env.DATABASE_URL = "mysql://test"; vi.clearAllMocks(); fakeDb.update.mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([{ affectedRows: 1 }]) }) }); fakeDb.insert.mockReturnValue({ values: vi.fn().mockResolvedValue([]) }); });
 
   it("rejects updating a live location message owned by another sender", async () => {
     fakeDb.select.mockReturnValue({ from: () => ({ where: () => ({ limit: async () => [{ id: 8, senderUserId: 4, messageType: "location" }] }) }) });
@@ -19,6 +19,14 @@ describe("chat media access boundaries", () => {
     await updateLiveLocation(8, 4, undefined, undefined, false);
     const setCall = fakeDb.update.mock.results[0]?.value?.set;
     expect(setCall).toHaveBeenCalledWith({ locationIsLive: 0, locationLatitude: 27.2, locationLongitude: 33.8 });
+  });
+
+  it("creates a visible system message when live sharing stops", async () => {
+    fakeDb.select.mockReturnValue({ from: () => ({ where: () => ({ limit: async () => [{ id: 8, senderUserId: 4, recipientUserId: 9, orderId: 77, messageType: "location", locationIsLive: 1, locationLatitude: 27.2, locationLongitude: 33.8 }] }) }) });
+    await updateLiveLocation(8, 4, undefined, undefined, false);
+    const values = fakeDb.insert.mock.results[0]?.value.values;
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ messageType: "system", body: expect.stringContaining("أوقف") }));
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ body: expect.any(String), createdAt: expect.any(Date) }));
   });
 
   it("rejects creating a location share from a user outside the order", async () => {
