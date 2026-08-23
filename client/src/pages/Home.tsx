@@ -1,5 +1,7 @@
 import AppHeader from "@/components/AppHeader";
-import { ArrowLeft, BadgeCheck, Bike, Clock3, LocateFixed, Package, Route, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { ArrowLeft, BadgeCheck, Bike, Clock3, LocateFixed, MapPinned, Package, Route, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { Link } from "wouter";
 
 const serviceCards = [
@@ -24,10 +26,15 @@ const serviceCards = [
 ];
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
+  const orders = trpc.orders.mine.useQuery(undefined, { enabled: isAuthenticated });
+  const activeOrder = orders.data?.find((order) => !["delivered", "cancelled"].includes(order.status));
+  const highlightedOrder = activeOrder || orders.data?.[0];
   return (
     <div dir="rtl" className="min-h-screen overflow-x-hidden bg-[#f8fbfc] text-slate-950">
       <AppHeader />
       <main>
+        {highlightedOrder && <section className="border-b border-teal-100 bg-[#effcf9]"><div className="container flex flex-wrap items-center justify-between gap-4 py-3"><div className="flex items-center gap-3"><span className="rounded-lg bg-teal-600 p-2 text-white"><Bike className="h-4 w-4" /></span><div><p className="text-xs font-extrabold text-teal-800">{activeOrder ? "لديك طلب نشط الآن" : "أحدث طلب لديك"}</p><p className="text-xs font-medium text-slate-600">{highlightedOrder.reference} · {highlightedOrder.pickupAddress} ← {highlightedOrder.destinationAddress}</p></div></div><Link href={`/track/${highlightedOrder.reference}`} className="rounded-xl bg-[#082538] px-3 py-2 text-xs font-extrabold text-white no-underline">فتح التفاصيل</Link></div></section>}
         <section className="relative isolate overflow-hidden border-b border-slate-200/70 bg-[#f8fbfc]">
           <div className="absolute left-[-8rem] top-[-10rem] -z-10 h-[28rem] w-[28rem] rounded-full bg-[#d8f7f1] blur-3xl" />
           <div className="absolute bottom-[-14rem] right-[-6rem] -z-10 h-[30rem] w-[30rem] rounded-full bg-[#ffe4da] blur-3xl" />
@@ -75,6 +82,10 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="border-y border-slate-100 bg-white">
+          <div className="container py-14 sm:py-16"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-extrabold tracking-[.16em] text-teal-700">داخل الغردقة</p><h2 className="mt-3 text-3xl font-black text-[#082538]">مناطق التغطية الأساسية</h2></div><p className="max-w-md text-sm font-medium leading-7 text-slate-600">تظهر لك تفاصيل العنوان والتقدير المبدئي قبل التأكيد. اكتب عنوانًا دقيقًا عند الطلب من منطقة أبعد.</p></div><div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{["السقالة والوسط", "الممشى السياحي", "الإنتركونتيننتال", "الأحياء والمناطق القريبة"].map((area) => <div key={area} className="flex items-center gap-3 rounded-2xl bg-[#f8fbfc] p-4"><span className="rounded-xl bg-teal-50 p-2 text-teal-700"><MapPinned className="h-4 w-4" /></span><span className="text-sm font-extrabold text-[#082538]">{area}</span></div>)}</div></div>
+        </section>
+
         <section id="safety" className="border-y border-teal-100 bg-[#e9faf7]">
           <div className="container grid gap-10 py-16 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
             <div><span className="inline-flex rounded-2xl bg-[#082538] p-4 text-white"><ShieldCheck className="h-8 w-8" /></span><h2 className="mt-5 text-3xl font-black leading-tight text-[#082538]">سلامتك جزء من كل مشوار.</h2><p className="mt-4 max-w-md text-sm font-medium leading-7 text-slate-600">فعّل التسليم دون تلامس، أضف أي ملاحظة صحية لازمة، واختر ما يناسب وضعك عند الحجز.</p></div>
@@ -91,7 +102,7 @@ export default function Home() {
           </div>
         </section>
       </main>
-      <footer className="bg-[#082538] py-8 text-center text-sm font-medium text-slate-300">مشوار الغردقة — خدمة توصيل محلية للأفراد والطلبات.</footer>
+      <footer className="bg-[#082538] py-8 text-center text-sm font-medium text-slate-300">اطلب أونلاين — خدمة توصيل محلية للأفراد والطلبات داخل الغردقة.</footer>
     </div>
   );
 }

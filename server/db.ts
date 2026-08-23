@@ -1,64 +1,181 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { deliveryOrders, InsertDeliveryOrder, InsertUser, users } from "../drizzle/schema";
+import { chatMessages, deliveryOrders, drivers, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { validateDriverStatusUpdate } from "./delivery";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+    try { _db = drizzle(process.env.DATABASE_URL); } catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
   }
   return _db;
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
-  const db = await getDb();
-  if (!db) return;
-
-  const values: InsertUser = { openId: user.openId };
-  const updateSet: Record<string, unknown> = {};
-  for (const field of ["name", "email", "loginMethod"] as const) {
-    if (user[field] !== undefined) {
-      values[field] = user[field] ?? null;
-      updateSet[field] = user[field] ?? null;
-    }
-  }
-  values.lastSignedIn = user.lastSignedIn ?? new Date();
-  updateSet.lastSignedIn = values.lastSignedIn;
-  if (user.role !== undefined) {
-    values.role = user.role;
-    updateSet.role = user.role;
-  } else if (user.openId === ENV.ownerOpenId) {
-    values.role = "admin";
-    updateSet.role = "admin";
-  }
+  const db = await getDb(); if (!db) return;
+  const values: InsertUser = { openId: user.openId }; const updateSet: Record<string, unknown> = {};
+  for (const field of ["name", "email", "phone", "loginMethod"] as const) if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; }
+  values.lastSignedIn = user.lastSignedIn ?? new Date(); updateSet.lastSignedIn = values.lastSignedIn;
+  if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; } else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result[0];
-}
+export async function getUserByOpenId(openId: string) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(users).where(eq(users.openId, openId)).limit(1))[0]; }
 
 export async function createDeliveryOrder(order: InsertDeliveryOrder) {
-  const db = await getDb();
-  if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
   await db.insert(deliveryOrders).values(order);
-  const created = await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, order.reference)).limit(1);
-  return created[0];
+  const saved = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, order.reference)).limit(1))[0];
+  if (!saved) throw new Error("تعذر حفظ الطلب.");
+  await db.insert(orderEvents).values({ orderId: saved.id, eventType: "created", status: "new", note: "تم إنشاء الطلب", actorUserId: order.userId });
+  await db.insert(notifications).values({ userId: order.userId, orderId: saved.id, title: "تم إنشاء طلبك", body: `رقم الطلب ${saved.reference} جاهز للمتابعة.` });
+  return saved;
 }
 
-export async function getDeliveryOrdersForUser(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
-  return db.select().from(deliveryOrders).where(eq(deliveryOrders.userId, userId)).orderBy(desc(deliveryOrders.createdAt));
+export async function getDeliveryOrdersForUser(userId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.userId, userId)).orderBy(desc(deliveryOrders.createdAt)); }
+
+export async function getDeliveryOrderWithEventsForUser(reference: string, userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
+  if (!order || order.userId !== userId) return undefined;
+  const events = await db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id)).orderBy(desc(orderEvents.createdAt));
+  const driver = order.driverId ? await getDriverById(order.driverId) : undefined;
+  return { order, events, driver };
+}
+
+export async function getDriverByUserId(userId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1))[0]; }
+
+export async function getNewOrdersForDriver() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.status, "new")).orderBy(desc(deliveryOrders.createdAt)); }
+
+export async function getOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.driverId, driverId)).orderBy(desc(deliveryOrders.createdAt)); }
+
+export async function updateDriverAvailability(driverId: number, availability: "offline" | "online" | "busy" | "suspended") { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(drivers).set({ availability }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
+export async function getDriverById(driverId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1))[0]; }
+export async function updateDriverLocation(driverId: number, latitude: number, longitude: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(drivers).set({ lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: new Date() }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
+
+export async function acceptOrderForDriver(orderId: number, driverId: number, actorUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!target || target.status !== "new") throw new Error("هذا الطلب لم يعد متاحًا.");
+  await db.update(deliveryOrders).set({ driverId, status: "assigned", acceptedAt: new Date() }).where(and(eq(deliveryOrders.id, orderId), eq(deliveryOrders.status, "new")));
+  await db.update(drivers).set({ availability: "busy" }).where(eq(drivers.id, driverId));
+  await db.insert(orderEvents).values({ orderId, eventType: "assigned", status: "assigned", note: "تم قبول الطلب من المندوب", actorUserId });
+  await db.insert(notifications).values({ userId: target.userId, orderId, title: "تم قبول طلبك", body: "تم تعيين مندوب لرحلتك ويمكنك متابعة التفاصيل الآن." });
+  return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+}
+
+export async function updateDriverOrderStatus(orderId: number, driverId: number, actorUserId: number, status: "driver_arrived" | "picked_up" | "in_delivery" | "delivered") {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!target) throw new Error("لا يمكنك تحديث هذا الطلب.");
+  validateDriverStatusUpdate({ assignedDriverId: target.driverId, actingDriverId: driverId, currentStatus: target.status, nextStatus: status });
+  const dateField = { driver_arrived: { driverArrivedAt: new Date() }, picked_up: { pickedUpAt: new Date() }, in_delivery: { deliveryStartedAt: new Date() }, delivered: { deliveredAt: new Date() } }[status];
+  await db.update(deliveryOrders).set({ status, ...dateField }).where(eq(deliveryOrders.id, orderId));
+  if (status === "delivered") {
+    const driver = await getDriverById(driverId);
+    if (driver) await db.update(drivers).set({ availability: "online", totalTrips: driver.totalTrips + 1, totalEarnings: driver.totalEarnings + target.estimatedFee }).where(eq(drivers.id, driverId));
+  }
+  const notes = { driver_arrived: "وصل المندوب إلى موقع الاستلام", picked_up: "تم استلام الطلب", in_delivery: "بدأ المندوب التوصيل", delivered: "تم تسليم الطلب" } as const;
+  await db.insert(orderEvents).values({ orderId, eventType: status, status, note: notes[status], actorUserId });
+  const notificationTitles = { driver_arrived: "المندوب وصل", picked_up: "تم استلام طلبك", in_delivery: "طلبك في الطريق", delivered: "تم تسليم طلبك" } as const;
+  await db.insert(notifications).values({ userId: target.userId, orderId, title: notificationTitles[status], body: notes[status] });
+  return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+}
+
+export async function getAdminSummary() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [orders, driverRows] = await Promise.all([db.select().from(deliveryOrders), db.select().from(drivers)]);
+  return { totalOrders: orders.length, activeOrders: orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length, deliveredOrders: orders.filter((order) => order.status === "delivered").length, cancelledOrders: orders.filter((order) => order.status === "cancelled").length, onlineDrivers: driverRows.filter((driver) => driver.availability === "online" || driver.availability === "busy").length, offlineDrivers: driverRows.filter((driver) => driver.availability === "offline").length, estimatedRevenue: orders.filter((order) => order.status === "delivered").reduce((sum, order) => sum + order.estimatedFee, 0) };
+}
+
+export async function getAdminDrivers() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(drivers).orderBy(desc(drivers.updatedAt)); }
+export async function getAdminUsers() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, role: users.role, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)); }
+export async function createDriverForUser(input: { userId: number; displayName: string; phone: string; vehicleType: string; vehiclePlate?: string }) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(users).set({ role: "driver" }).where(eq(users.id, input.userId)); await db.insert(drivers).values({ ...input, vehiclePlate: input.vehiclePlate || null, availability: "offline" }); return getDriverByUserId(input.userId); }
+export async function setDriverAdminStatus(driverId: number, availability: "offline" | "online" | "suspended") { return updateDriverAvailability(driverId, availability); }
+export async function getAdminOrders() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).orderBy(desc(deliveryOrders.createdAt)); }
+
+export async function getProfileWithAddresses(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const user = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0];
+  const addresses = await db.select().from(savedAddresses).where(eq(savedAddresses.userId, userId)).orderBy(desc(savedAddresses.isFavorite), desc(savedAddresses.updatedAt));
+  return { user, addresses };
+}
+
+export async function saveAddressForUser(input: { userId: number; label: string; address: string; isFavorite: boolean }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.insert(savedAddresses).values({ userId: input.userId, label: input.label, address: input.address, isFavorite: input.isFavorite ? 1 : 0 });
+  return db.select().from(savedAddresses).where(eq(savedAddresses.userId, input.userId)).orderBy(desc(savedAddresses.updatedAt));
+}
+
+export async function updateContactForUser(userId: number, name: string, phone: string) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.update(users).set({ name, phone }).where(eq(users.id, userId));
+  return getProfileWithAddresses(userId);
+}
+
+export async function getSupportConversation(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  return db.select().from(chatMessages).where(and(eq(chatMessages.channel, "support"), or(eq(chatMessages.senderUserId, userId), eq(chatMessages.recipientUserId, userId)))).orderBy(chatMessages.createdAt);
+}
+
+export async function sendSupportMessage(input: { senderUserId: number; body: string; locationLabel?: string; locationLatitude?: number; locationLongitude?: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const admin = (await db.select().from(users).where(eq(users.role, "admin")).limit(1))[0];
+  if (!admin) throw new Error("لا يتوفر حساب دعم حاليًا.");
+  await db.insert(chatMessages).values({ senderUserId: input.senderUserId, recipientUserId: admin.id, channel: "support", body: input.body, locationLabel: input.locationLabel || null, locationLatitude: input.locationLatitude ?? null, locationLongitude: input.locationLongitude ?? null });
+  await db.insert(notifications).values({ userId: admin.id, title: "رسالة دعم جديدة", body: input.body });
+  return getSupportConversation(input.senderUserId);
+}
+
+export async function getAdminSupportInbox(adminUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  return db.select().from(chatMessages).where(and(eq(chatMessages.channel, "support"), eq(chatMessages.recipientUserId, adminUserId))).orderBy(desc(chatMessages.createdAt));
+}
+
+export async function sendAdminSupportReply(input: { adminUserId: number; recipientUserId: number; body: string }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.insert(chatMessages).values({ senderUserId: input.adminUserId, recipientUserId: input.recipientUserId, channel: "support", body: input.body });
+  await db.insert(notifications).values({ userId: input.recipientUserId, title: "رد جديد من الدعم", body: input.body });
+  return getAdminSupportInbox(input.adminUserId);
+}
+
+export async function getNotificationsForUser(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+}
+
+export async function getDriverChatForCustomer(reference: string, customerUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
+  if (!order || order.userId !== customerUserId || !order.driverId) return { available: false as const, messages: [] };
+  return { available: true as const, messages: await db.select().from(chatMessages).where(and(eq(chatMessages.orderId, order.id), eq(chatMessages.channel, "driver"))).orderBy(chatMessages.createdAt) };
+}
+
+export async function sendCustomerDriverMessage(reference: string, customerUserId: number, body: string) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
+  if (!order || order.userId !== customerUserId || !order.driverId) throw new Error("لم يُعيّن مندوب لهذا الطلب بعد.");
+  const driver = await getDriverById(order.driverId); if (!driver) throw new Error("بيانات المندوب غير متاحة.");
+  await db.insert(chatMessages).values({ orderId: order.id, senderUserId: customerUserId, recipientUserId: driver.userId, channel: "driver", body });
+  await db.insert(notifications).values({ userId: driver.userId, orderId: order.id, title: "رسالة جديدة من عميل", body });
+  return getDriverChatForCustomer(reference, customerUserId);
+}
+
+export async function getDriverChatForDriver(orderId: number, driverUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(driverUserId); const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!driver || !order || order.driverId !== driver.id) throw new Error("لا يمكنك عرض رسائل هذا الطلب.");
+  return db.select().from(chatMessages).where(and(eq(chatMessages.orderId, orderId), eq(chatMessages.channel, "driver"))).orderBy(chatMessages.createdAt);
+}
+
+export async function sendDriverCustomerMessage(orderId: number, driverUserId: number, body: string) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(driverUserId); const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!driver || !order || order.driverId !== driver.id) throw new Error("لا يمكنك مراسلة هذا العميل.");
+  await db.insert(chatMessages).values({ orderId, senderUserId: driverUserId, recipientUserId: order.userId, channel: "driver", body });
+  await db.insert(notifications).values({ userId: order.userId, orderId, title: "رسالة من المندوب", body });
+  return getDriverChatForDriver(orderId, driverUserId);
 }

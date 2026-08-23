@@ -15,6 +15,20 @@
       "when": 1787499168047,
       "tag": "0001_wide_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1787500185595,
+      "tag": "0002_minor_ultron",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1787501052448,
+      "tag": "0003_funny_magma",
+      "breakpoints": true
     }
   ]
 }

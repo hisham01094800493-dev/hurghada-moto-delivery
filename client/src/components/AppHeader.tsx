@@ -13,7 +13,7 @@ export default function AppHeader() {
         <Link href="/" className="flex items-center gap-3 text-slate-950 no-underline">
           <img className="h-11 w-11 rounded-2xl shadow-[0_8px_20px_rgba(8,37,56,.17)]" src="/manus-storage/hurghada-moto-app-icon_235868ff.png" alt="أيقونة مشوار الغردقة" />
           <span className="leading-none">
-            <strong className="block text-lg font-extrabold tracking-tight">مشوار</strong>
+            <strong className="block text-lg font-extrabold tracking-tight">اطلب أونلاين</strong>
             <small className="mt-1 block text-[11px] font-bold tracking-[0.12em] text-teal-700">HURGHADA DELIVERY</small>
           </span>
         </Link>
@@ -21,6 +21,8 @@ export default function AppHeader() {
           <a href="/#services" className="transition hover:text-teal-700">الخدمات</a>
           <a href="/#safety" className="transition hover:text-teal-700">السلامة</a>
           <Link href="/my-orders" className="transition hover:text-teal-700">طلباتي</Link>
+          <Link href="/profile" className="transition hover:text-teal-700">حسابي</Link>
+          <Link href="/support" className="transition hover:text-teal-700">الدعم</Link>
         </nav>
         <div className="flex items-center gap-2">
           {!loading && (isAuthenticated ? (

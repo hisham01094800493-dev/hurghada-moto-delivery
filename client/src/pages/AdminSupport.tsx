@@ -1,0 +1,15 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import DashboardLayout from "@/components/DashboardLayout";
+import { trpc } from "@/lib/trpc";
+import { MessageCircle, Send } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { toast } from "sonner";
+
+const adminMenu = [{ icon: MessageCircle, label: "رسائل الدعم", path: "/admin/support" }];
+
+export default function AdminSupport() {
+  const { user } = useAuth(); const utils = trpc.useUtils(); const inbox = trpc.admin.supportInbox.useQuery(undefined, { enabled: user?.role === "admin" }); const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const reply = trpc.admin.replySupport.useMutation({ onSuccess: () => { utils.admin.supportInbox.invalidate(); toast.success("تم إرسال الرد للعميل."); }, onError: (error) => toast.error(error.message) });
+  const submit = (event: FormEvent, recipientUserId: number) => { event.preventDefault(); const body = drafts[recipientUserId]?.trim(); if (!body) return; reply.mutate({ recipientUserId, body }); setDrafts((current) => ({ ...current, [recipientUserId]: "" })); };
+  return <div dir="rtl"><DashboardLayout menuItems={adminMenu} title="دعم العملاء"><div className="mx-auto max-w-5xl"><p className="text-xs font-extrabold tracking-[.16em] text-teal-700">رسائل تشغيلية</p><h1 className="mt-2 text-3xl font-black text-[#082538]">صندوق دعم العملاء</h1><p className="mt-2 text-sm font-medium text-slate-600">الرسائل محفوظة ويمكن الرد عليها دون الحاجة إلى اتصال حي دائم.</p>{user?.role !== "admin" ? <section className="mt-8 rounded-2xl border border-red-100 bg-red-50 p-8 text-center text-sm font-bold text-red-700">يلزم حساب إداري للوصول إلى الرسائل.</section> : <section className="mt-8 space-y-4">{inbox.data?.length ? inbox.data.map((message) => <article key={message.id} className="rounded-[1.7rem] border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold text-slate-500">عميل رقم #{message.senderUserId}</p><p className="mt-2 text-sm font-black leading-7 text-[#082538]">{message.body}</p>{message.locationLabel && <p className="mt-2 text-xs font-bold text-teal-700">الموقع المرفق: {message.locationLabel}</p>}</div><span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-extrabold text-teal-800">دعم</span></div><form onSubmit={(event) => submit(event, message.senderUserId)} className="mt-4 flex gap-2"><input value={drafts[message.senderUserId] || ""} onChange={(event) => setDrafts((current) => ({ ...current, [message.senderUserId]: event.target.value }))} placeholder="اكتب ردًا للعميل..." className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm" /><button disabled={reply.isPending} className="rounded-xl bg-[#082538] px-4 text-white"><Send className="h-4 w-4" /></button></form></article>) : <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-10 text-center"><MessageCircle className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-3 text-sm font-bold text-slate-500">لا توجد رسائل دعم جديدة.</p></div>}</section>}</div></DashboardLayout></div>;
+}

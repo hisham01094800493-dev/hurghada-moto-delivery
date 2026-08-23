@@ -1,33 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { deliveryOrderInput, estimateDeliveryFee } from "./delivery";
+import { calculateDistanceMeters, calculateOperationalQuote } from "@shared/delivery";
+import { allowedStatusTransitions, assertOperationalStatusTransition, buildOperationalQuote, deliveryOrderInput, validateDriverStatusUpdate } from "./delivery";
 
-const baseOrder = {
-  serviceType: "person" as const,
-  customerName: "أحمد علي",
-  customerPhone: "01012345678",
-  pickupAddress: "ميدان السقالة، الغردقة",
-  destinationAddress: "الممشى السياحي، الغردقة",
-  requestedFor: "2026-08-23T14:00",
-  contactless: true,
-};
+const baseOrder = { serviceType: "person" as const, customerName: "أحمد علي", customerPhone: "01012345678", pickupAddress: "ميدان السقالة، الغردقة", pickupLatitude: 27.2579, pickupLongitude: 33.8116, destinationAddress: "الممشى السياحي، الغردقة", destinationLatitude: 27.24, destinationLongitude: 33.84, requestedFor: "2026-08-23T14:00", contactless: true };
 
-describe("delivery pricing", () => {
-  it("uses the base fee for a daytime parcel delivery", () => {
-    expect(estimateDeliveryFee("parcel", "2026-08-23T14:00")).toBe(45);
-  });
-
-  it("adds the late-hours surcharge to a person delivery", () => {
-    expect(estimateDeliveryFee("person", "2026-08-23T23:00")).toBe(80);
-  });
+describe("operational pricing", () => {
+  it("calculates a non-zero distance between two mapped locations", () => expect(calculateDistanceMeters({ latitude: 27.2579, longitude: 33.8116 }, { latitude: 27.24, longitude: 33.84 })).toBeGreaterThan(100));
+  it("adds a distance amount to the service base fee", () => expect(calculateOperationalQuote({ serviceType: "parcel", distanceMeters: 2000, requestedFor: "2026-08-23T14:00" }).estimatedFee).toBe(57));
+  it("creates an operational quote from a valid request", () => expect(buildOperationalQuote(baseOrder).estimatedMinutes).toBeGreaterThanOrEqual(8));
 });
 
-describe("delivery order validation", () => {
-  it("requires parcel recipient information and a description", () => {
-    const result = deliveryOrderInput.safeParse({ ...baseOrder, serviceType: "parcel" });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts a valid person delivery request", () => {
-    expect(deliveryOrderInput.safeParse(baseOrder).success).toBe(true);
-  });
+describe("delivery order validation and states", () => {
+  it("requires a recipient and description for parcel delivery", () => expect(deliveryOrderInput.safeParse({ ...baseOrder, serviceType: "parcel" }).success).toBe(false));
+  it("accepts a valid person delivery request", () => expect(deliveryOrderInput.safeParse(baseOrder).success).toBe(true));
+  it("only permits the operational next status from a new order", () => expect(allowedStatusTransitions.new).toEqual(["assigned", "cancelled"]));
+  it("rejects an invalid operational transition", () => expect(() => assertOperationalStatusTransition("assigned", "delivered")).toThrow("لا يمكن تنفيذ هذا الإجراء"));
+  it("permits the assigned-to-arrival operational transition", () => expect(() => assertOperationalStatusTransition("assigned", "driver_arrived")).not.toThrow());
+  it("rejects an invalid state change through the driver update guard", () => expect(() => validateDriverStatusUpdate({ assignedDriverId: 5, actingDriverId: 5, currentStatus: "assigned", nextStatus: "delivered" })).toThrow("لا يمكن تنفيذ هذا الإجراء"));
+  it("rejects a driver who is not assigned to the order", () => expect(() => validateDriverStatusUpdate({ assignedDriverId: 5, actingDriverId: 8, currentStatus: "assigned", nextStatus: "driver_arrived" })).toThrow("لا يمكنك تحديث هذا الطلب"));
 });
