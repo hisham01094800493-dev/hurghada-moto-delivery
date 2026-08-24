@@ -329,6 +329,17 @@ export async function getAdminPaymentOrders() {
   return db.select().from(deliveryOrders).where(eq(deliveryOrders.paymentMethod, "vodafone_cash")).orderBy(desc(deliveryOrders.updatedAt));
 }
 
+export async function getAdminOperationalAuditLog() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [cancellations, rejectedInvitations, driverRows] = await Promise.all([
+    db.select({ id: deliveryOrders.id, reference: deliveryOrders.reference, customerName: deliveryOrders.customerName, cancelledAt: deliveryOrders.cancelledAt, reason: deliveryOrders.cancellationReason }).from(deliveryOrders).where(eq(deliveryOrders.status, "cancelled")).orderBy(desc(deliveryOrders.cancelledAt)).limit(30),
+    db.select({ id: driverOrderInvitations.id, orderId: driverOrderInvitations.orderId, driverId: driverOrderInvitations.driverId, reference: deliveryOrders.reference, customerName: deliveryOrders.customerName, distanceMeters: driverOrderInvitations.distanceMeters, respondedAt: driverOrderInvitations.respondedAt }).from(driverOrderInvitations).innerJoin(deliveryOrders, eq(driverOrderInvitations.orderId, deliveryOrders.id)).where(eq(driverOrderInvitations.status, "rejected")).orderBy(desc(driverOrderInvitations.respondedAt)).limit(30),
+    db.select({ id: drivers.id, displayName: drivers.displayName }).from(drivers),
+  ]);
+  const driverNames = new Map(driverRows.map((driver) => [driver.id, driver.displayName]));
+  return { cancellations, rejectedInvitations: rejectedInvitations.map((invitation) => ({ ...invitation, driverName: driverNames.get(invitation.driverId) || `مندوب #${invitation.driverId}` })) };
+}
+
 export async function verifyVodafonePayment(orderId: number, adminUserId: number, status: "paid" | "failed") {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];

@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import AppHeader from "@/components/AppHeader";
+import { BrowserNotificationToggle } from "@/components/BrowserNotifications";
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Heart, MapPin, Package, Plus, Settings2, UserRound } from "lucide-react";

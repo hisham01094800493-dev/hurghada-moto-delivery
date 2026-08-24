@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { BrowserNotificationToggle } from "@/components/BrowserNotifications";
 import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
 import { LogIn, Menu, PackageCheck, Route } from "lucide-react";
@@ -26,10 +27,14 @@ export default function AppHeader() {
         </nav>
         <div className="flex items-center gap-2">
           {!loading && (isAuthenticated ? (
-            <Link href="/profile" className="hidden items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white no-underline sm:flex">
-              <PackageCheck className="h-4 w-4" />
-              <span>{user?.name?.split(" ")[0] || "طلباتي"}</span>
-            </Link>
+            <>
+              <span className="sm:hidden"><BrowserNotificationToggle compact /></span>
+              <span className="hidden sm:block"><BrowserNotificationToggle /></span>
+              <Link href="/profile" className="hidden items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white no-underline sm:flex">
+                <PackageCheck className="h-4 w-4" />
+                <span>{user?.name?.split(" ")[0] || "طلباتي"}</span>
+              </Link>
+            </>
           ) : (
             <Button onClick={() => startLogin()} className="rounded-xl bg-slate-950 px-4 font-bold hover:bg-slate-800">
               <LogIn className="ml-2 h-4 w-4" /> دخول سريع / إنشاء حساب

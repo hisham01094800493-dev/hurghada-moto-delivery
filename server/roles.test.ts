@@ -27,6 +27,7 @@ describe("operational roles", () => {
   it("rejects admin reporting for a non-admin account", async () => {
     const caller = appRouter.createCaller(makeContext(ordinaryUser));
     await expect(caller.admin.summary()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.auditLog()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("rejects customer orders without an authenticated session", async () => {

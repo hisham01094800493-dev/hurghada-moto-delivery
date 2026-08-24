@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Booking from "@/pages/Booking";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminAuditLog from "@/pages/AdminAuditLog";
 import AdminSupport from "@/pages/AdminSupport";
 import DriverDashboard from "@/pages/DriverDashboard";
 import Home from "@/pages/Home";
@@ -11,6 +12,7 @@ import Profile from "@/pages/Profile";
 import Support from "@/pages/Support";
 import TrackOrder from "@/pages/TrackOrder";
 import { Route, Switch } from "wouter";
+import { BrowserNotificationManager } from "./components/BrowserNotifications";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -27,6 +29,7 @@ function Router() {
       <Route path="/track/:reference" component={TrackOrder} />
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/admin/audit" component={AdminAuditLog} />
       <Route path="/admin/support" component={AdminSupport} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
@@ -40,6 +43,7 @@ export default function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster richColors position="top-center" />
+          <BrowserNotificationManager />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
