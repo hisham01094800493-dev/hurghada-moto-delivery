@@ -25,6 +25,9 @@ import { ShipmentDetailsDock } from "./components/ShipmentDetailsDock";
 import { OrderStopsPanel } from "./components/OrderStopsPanel";
 import { DriverStopsPanel } from "./components/DriverStopsPanel";
 import { ShipmentAttachmentDock } from "./components/ShipmentAttachmentDock";
+import { ShareTrackingDock } from "./components/ShareTrackingDock";
+import { DriverNavigationDock } from "./components/DriverNavigationDock";
+import SharedTracking from "@/pages/SharedTracking";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -40,6 +43,7 @@ function Router() {
       <Route path="/settings" component={Profile} />
       <Route path="/support" component={Support} />
       <Route path="/track/:reference" component={TrackOrder} />
+      <Route path="/shared/:token" component={SharedTracking} />
       <Route path="/driver/earnings" component={DriverEarnings} />
       <Route path="/driver/verification" component={DriverVerification} />
       <Route path="/driver" component={DriverDashboard} />
@@ -69,6 +73,8 @@ export default function App() {
           <OrderStopsPanel />
           <DriverStopsPanel />
           <ShipmentAttachmentDock />
+          <ShareTrackingDock />
+          <DriverNavigationDock />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

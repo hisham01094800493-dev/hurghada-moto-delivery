@@ -8,6 +8,7 @@ import { buildDailyDeliveryReport } from "../shared/reporting";
 import { calculatePlatformCommission, defaultServicePricingRules, DeliveryServiceType, normalizeServicePricingRules, ServicePricingRules } from "../shared/delivery";
 import { calculateAvailableWithdrawalBalance } from "../shared/driver-finance";
 import { calculateCouponDiscount, normalizeCouponCode } from "../shared/coupons";
+import { randomBytes } from "node:crypto";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -143,6 +144,23 @@ export async function getDeliveryOrderWithEventsForUser(reference: string, userI
   const [events, stops] = await Promise.all([db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id)).orderBy(desc(orderEvents.createdAt)), db.select().from(deliveryStops).where(eq(deliveryStops.orderId, order.id)).orderBy(deliveryStops.sequence)]);
   const driver = order.driverId ? await getDriverById(order.driverId) : undefined;
   return { order, events, stops, driver };
+}
+
+export async function setTrackingShareForCustomer(reference: string, userId: number, enabled: boolean) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(and(eq(deliveryOrders.reference, reference), eq(deliveryOrders.userId, userId))).limit(1))[0];
+  if (!order) throw new Error("لا يمكنك مشاركة هذا الطلب.");
+  const token = enabled ? randomBytes(24).toString("hex") : order.trackingShareToken;
+  await db.update(deliveryOrders).set({ trackingShareEnabled: enabled ? 1 : 0, trackingShareToken: token }).where(eq(deliveryOrders.id, order.id));
+  return { enabled, token: enabled ? token : null };
+}
+
+export async function getSharedTracking(token: string) {
+  const db = await getDb(); if (!db) throw new Error("التتبع غير متاح حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(and(eq(deliveryOrders.trackingShareToken, token), eq(deliveryOrders.trackingShareEnabled, 1))).limit(1))[0];
+  if (!order) throw new Error("رابط التتبع غير صالح أو تم إيقافه.");
+  const driver = order.driverId ? await getDriverById(order.driverId) : undefined;
+  return { reference: order.reference, serviceType: order.serviceType, status: order.status, estimatedMinutes: order.estimatedMinutes, pickupAddress: order.pickupAddress, destinationAddress: order.destinationAddress, requestedFor: order.requestedFor, driverLocation: driver?.lastLatitude !== null && driver?.lastLatitude !== undefined && driver?.lastLongitude !== null && driver?.lastLongitude !== undefined ? { latitude: driver.lastLatitude, longitude: driver.lastLongitude, updatedAt: driver.lastLocationAt } : null };
 }
 
 export async function getShipmentAttachmentsForCustomer(reference: string, userId: number) {

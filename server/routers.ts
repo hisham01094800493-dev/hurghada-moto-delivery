@@ -9,6 +9,7 @@ import { getVodafoneCashInstructions } from "./payment";
 import { CANCELLATION_REASONS } from "../shared/cancellation";
 import { storagePut } from "./storage";
 import { MAX_AUDIO_BYTES, validateAudioUpload } from "@shared/chat-media";
+import { getSharedTracking, setTrackingShareForCustomer } from "./db";
 
 const availabilityInput = z.enum(["offline", "online", "busy", "suspended"]);
 const driverStatusInput = z.enum(["driver_arrived", "picked_up", "in_delivery", "delivered"]);
@@ -16,6 +17,7 @@ const driverStatusInput = z.enum(["driver_arrived", "picked_up", "in_delivery", 
 export const appRouter = router({
   system: systemRouter,
   payment: router({ config: publicProcedure.query(() => getVodafoneCashInstructions()) }),
+  shared: router({ tracking: publicProcedure.input(z.object({ token: z.string().regex(/^[a-f0-9]{48}$/) })).query(({ input }) => getSharedTracking(input.token)) }),
   pricing: router({ rules: publicProcedure.query(() => getServicePricingRuleMap()), zones: publicProcedure.query(() => getActiveServiceZones()) }),
   auth: router({ me: publicProcedure.query((opts) => opts.ctx.user), logout: publicProcedure.mutation(({ ctx }) => { const cookieOptions = getSessionCookieOptions(ctx.req); ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 }); return { success: true } as const; }) }),
   orders: router({
@@ -23,6 +25,7 @@ export const appRouter = router({
 
     mine: protectedProcedure.query(({ ctx }) => getDeliveryOrdersForUser(ctx.user.id)),
     track: protectedProcedure.input(z.object({ reference: z.string().min(5) })).query(({ ctx, input }) => getDeliveryOrderWithEventsForUser(input.reference, ctx.user.id)),
+    shareTracking: protectedProcedure.input(z.object({ reference: z.string().min(5), enabled: z.boolean() })).mutation(({ ctx, input }) => setTrackingShareForCustomer(input.reference, ctx.user.id, input.enabled)),
     attachments: protectedProcedure.input(z.object({ reference: z.string().min(5) })).query(({ ctx, input }) => getShipmentAttachmentsForCustomer(input.reference, ctx.user.id)),
     uploadAttachment: protectedProcedure.input(z.object({ orderId: z.number().int().positive(), attachmentType: z.enum(["shipment_photo", "other"]), fileName: z.string().trim().regex(/^[A-Za-z0-9._-]{1,120}$/), mimeType: z.enum(["image/jpeg", "image/png", "application/pdf"]), dataBase64: z.string().min(20).max(6000000) })).mutation(async ({ ctx, input }) => { const bytes = Buffer.from(input.dataBase64, "base64"); if (bytes.byteLength > 4_000_000) throw new Error("حجم المرفق يجب ألا يتجاوز 4 ميجابايت."); const uploaded = await storagePut(`shipment-attachments/${ctx.user.id}/${input.orderId}-${Date.now()}-${input.fileName}`, bytes, input.mimeType); return saveShipmentAttachment({ orderId: input.orderId, uploaderUserId: ctx.user.id, attachmentType: input.attachmentType, fileUrl: uploaded.url, fileName: input.fileName, mimeType: input.mimeType, sizeBytes: bytes.byteLength }); }),
     cancel: protectedProcedure.input(z.object({ reference: z.string().min(5), reason: z.enum(CANCELLATION_REASONS) })).mutation(({ ctx, input }) => cancelOrderForCustomer(input.reference, ctx.user.id, input.reason)),

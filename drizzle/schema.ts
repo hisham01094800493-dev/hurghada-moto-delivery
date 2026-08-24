@@ -105,6 +105,8 @@ export const savedAddresses = mysqlTable("saved_addresses", {
 export const deliveryOrders = mysqlTable("delivery_orders", {
   id: int("id").autoincrement().primaryKey(),
   reference: varchar("reference", { length: 32 }).notNull().unique(),
+  trackingShareToken: varchar("trackingShareToken", { length: 64 }).unique(),
+  trackingShareEnabled: int("trackingShareEnabled").notNull().default(0),
   userId: int("userId").notNull().references(() => users.id),
   driverId: int("driverId").references(() => drivers.id),
   serviceType: mysqlEnum("serviceType", ["person", "parcel", "documents", "items", "other"]).notNull(),
