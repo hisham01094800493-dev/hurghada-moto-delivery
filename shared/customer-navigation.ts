@@ -1,7 +1,7 @@
 export type NavigationRole = "user" | "driver" | "admin" | null | undefined;
 
 export type NavigationItem = {
-  key: "home" | "new-order" | "orders" | "account" | "support" | "driver-orders" | "driver-earnings" | "driver-verification" | "admin-dashboard" | "admin-drivers" | "admin-zones" | "admin-verifications" | "admin-coupons" | "admin-feedback" | "admin-audit";
+  key: "home" | "new-order" | "orders" | "account" | "support" | "driver-orders" | "driver-earnings" | "driver-verification" | "admin-dashboard" | "admin-operations" | "admin-drivers" | "admin-zones" | "admin-verifications" | "admin-coupons" | "admin-feedback" | "admin-audit";
   label: string;
   path: string;
 };
@@ -22,6 +22,7 @@ export const driverNavigation: readonly NavigationItem[] = [
 
 export const adminNavigation: readonly NavigationItem[] = [
   { key: "admin-dashboard", label: "لوحة الإدارة", path: "/admin" },
+  { key: "admin-operations", label: "مركز العمليات", path: "/admin/operations" },
   { key: "admin-drivers", label: "السائقون والتسعير", path: "/admin/drivers" },
   { key: "admin-zones", label: "المناطق والرسوم", path: "/admin/zones" },
   { key: "admin-verifications", label: "اعتماد السائقين", path: "/admin/verifications" },
