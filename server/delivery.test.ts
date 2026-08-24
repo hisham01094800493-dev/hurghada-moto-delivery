@@ -11,6 +11,11 @@ describe("operational pricing", () => {
   it("prices a parcel above a person trip for the same distance by default", () => { const person = calculateOperationalQuote({ serviceType: "person", distanceMeters: 2000, requestedFor: "2026-08-23T14:00" }); const parcel = calculateOperationalQuote({ serviceType: "parcel", distanceMeters: 2000, requestedFor: "2026-08-23T14:00" }); expect(parcel.estimatedFee).toBeGreaterThan(person.estimatedFee); });
   it("splits completed order value into platform commission and driver net", () => expect(calculatePlatformCommission(120, 10)).toEqual({ grossFee: 120, commissionPercent: 10, platformCommissionAmount: 12, driverEarnings: 108 }));
   it("creates an operational quote from a valid request", () => expect(buildOperationalQuote(baseOrder).estimatedMinutes).toBeGreaterThanOrEqual(8));
+  it("includes each additional stop in the quoted route distance", () => {
+    const direct = buildOperationalQuote(baseOrder);
+    const withStop = buildOperationalQuote({ ...baseOrder, additionalStops: [{ address: "منطقة الكوثر، الغردقة", latitude: 27.28, longitude: 33.83 }] });
+    expect(withStop.distanceMeters).toBeGreaterThan(direct.distanceMeters);
+  });
 });
 
 describe("delivery order validation and states", () => {

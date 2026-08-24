@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, coupons, deliveryComplaints, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
+import { chatMessages, coupons, deliveryComplaints, deliveryOrders, deliveryStops, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
@@ -99,12 +99,13 @@ async function dispatchOrderToNearestDrivers(db: Awaited<ReturnType<typeof getDb
   return nearest;
 }
 
-export async function createDeliveryOrder(order: InsertDeliveryOrder, couponId?: number) {
+export async function createDeliveryOrder(order: InsertDeliveryOrder, couponId?: number, stops: Array<{ address: string; latitude?: number; longitude?: number; recipientName?: string; recipientPhone?: string; notes?: string }> = []) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
   await db.insert(deliveryOrders).values(order);
   const saved = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, order.reference)).limit(1))[0];
   if (!saved) throw new Error("تعذر حفظ الطلب.");
   if (couponId) await db.update(coupons).set({ usedCount: sql`${coupons.usedCount} + 1` }).where(eq(coupons.id, couponId));
+  if (stops.length) await db.insert(deliveryStops).values(stops.map((stop, index) => ({ orderId: saved.id, sequence: index + 1, address: stop.address, latitude: stop.latitude ?? null, longitude: stop.longitude ?? null, recipientName: stop.recipientName || null, recipientPhone: stop.recipientPhone || null, notes: stop.notes || null })));
   await db.insert(orderEvents).values({ orderId: saved.id, eventType: "created", status: "new", note: "تم إنشاء الطلب وانتظار قبول مندوب قريب", actorUserId: order.userId });
   await db.insert(notifications).values({ userId: order.userId, orderId: saved.id, title: "تم إنشاء طلبك", body: `رقم الطلب ${saved.reference} قيد البحث عن مندوب قريب.` });
   await dispatchOrderToNearestDrivers(db, saved);
@@ -117,9 +118,9 @@ export async function getDeliveryOrderWithEventsForUser(reference: string, userI
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
   const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
   if (!order || order.userId !== userId) return undefined;
-  const events = await db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id)).orderBy(desc(orderEvents.createdAt));
+  const [events, stops] = await Promise.all([db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id)).orderBy(desc(orderEvents.createdAt)), db.select().from(deliveryStops).where(eq(deliveryStops.orderId, order.id)).orderBy(deliveryStops.sequence)]);
   const driver = order.driverId ? await getDriverById(order.driverId) : undefined;
-  return { order, events, driver };
+  return { order, events, stops, driver };
 }
 
 export async function getDriverByUserId(userId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1))[0]; }
@@ -127,6 +128,28 @@ export async function getDriverByUserId(userId: number) { const db = await getDb
 export async function getNewOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const invitations = await db.select().from(driverOrderInvitations).where(and(eq(driverOrderInvitations.driverId, driverId), eq(driverOrderInvitations.status, "pending"))); const orderIds = invitations.filter((invitation) => invitation.expiresAt > new Date()).map((invitation) => invitation.orderId); if (!orderIds.length) return []; const orders = await db.select().from(deliveryOrders).where(and(inArray(deliveryOrders.id, orderIds), eq(deliveryOrders.status, "new"))).orderBy(desc(deliveryOrders.createdAt)); return orders.filter(canEnterDriverOperations); }
 
 export async function getOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.driverId, driverId)).orderBy(desc(deliveryOrders.createdAt)); }
+
+export async function getDeliveryStopsForDriver(orderId: number, driverUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(driverUserId); if (!driver) throw new Error("لا يوجد ملف مندوب مرتبط بهذا الحساب.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+  if (!order || order.driverId !== driver.id) throw new Error("لا يمكنك الوصول إلى نقاط توقف هذا الطلب.");
+  return db.select().from(deliveryStops).where(eq(deliveryStops.orderId, orderId)).orderBy(deliveryStops.sequence);
+}
+
+export async function updateDeliveryStopStatus(stopId: number, driverId: number, actorUserId: number, status: "delivered" | "skipped") {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const stop = (await db.select().from(deliveryStops).where(eq(deliveryStops.id, stopId)).limit(1))[0];
+  if (!stop) throw new Error("نقطة التوقف غير موجودة.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, stop.orderId)).limit(1))[0];
+  if (!order || order.driverId !== driverId) throw new Error("لا يمكنك تحديث هذه النقطة.");
+  if (!["picked_up", "in_delivery"].includes(order.status)) throw new Error("لا يمكن تحديث نقطة توقف قبل استلام الشحنة.");
+  await db.update(deliveryStops).set({ status, completedAt: new Date() }).where(eq(deliveryStops.id, stopId));
+  const note = status === "delivered" ? `تم تنفيذ التوقف رقم ${stop.sequence}.` : `تم تجاوز التوقف رقم ${stop.sequence}.`;
+  await db.insert(orderEvents).values({ orderId: order.id, eventType: "stop_updated", status: order.status, note, actorUserId });
+  await db.insert(notifications).values({ userId: order.userId, orderId: order.id, title: "تحديث مسار الشحنة", body: note });
+  return db.select().from(deliveryStops).where(eq(deliveryStops.orderId, order.id)).orderBy(deliveryStops.sequence);
+}
 
 export async function updateDriverAvailability(driverId: number, availability: "offline" | "online" | "busy" | "suspended") { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(drivers).set({ availability }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
 export async function getDriverById(driverId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1))[0]; }

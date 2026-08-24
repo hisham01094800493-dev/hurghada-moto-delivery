@@ -18,6 +18,9 @@ import TrackOrder from "@/pages/TrackOrder";
 import { Route, Switch } from "wouter";
 import { BrowserNotificationManager } from "./components/BrowserNotifications";
 import { BookingCouponBar } from "./components/BookingCouponBar";
+import { ShipmentDetailsDock } from "./components/ShipmentDetailsDock";
+import { OrderStopsPanel } from "./components/OrderStopsPanel";
+import { DriverStopsPanel } from "./components/DriverStopsPanel";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -56,6 +59,9 @@ export default function App() {
           <BrowserNotificationManager />
           <InstallAppPrompt />
           <BookingCouponBar />
+          <ShipmentDetailsDock />
+          <OrderStopsPanel />
+          <DriverStopsPanel />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

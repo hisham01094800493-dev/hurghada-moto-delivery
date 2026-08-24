@@ -107,6 +107,9 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   packageDescription: text("packageDescription"),
   packageSize: mysqlEnum("packageSize", ["small", "medium", "large"]).default("small"),
   itemCount: int("itemCount").notNull().default(1),
+  shipmentCategory: mysqlEnum("shipmentCategory", ["general", "food", "documents", "fragile", "medicine"]).notNull().default("general"),
+  declaredValue: int("declaredValue").notNull().default(0),
+  requiresSignature: int("requiresSignature").notNull().default(0),
   contactless: int("contactless").notNull().default(0),
   healthNotes: text("healthNotes"),
   distanceMeters: int("distanceMeters").notNull().default(0),
@@ -128,6 +131,22 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   deliveredAt: timestamp("deliveredAt"),
   cancelledAt: timestamp("cancelledAt"),
   cancellationReason: text("cancellationReason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const deliveryStops = mysqlTable("delivery_stops", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().references(() => deliveryOrders.id),
+  sequence: int("sequence").notNull(),
+  address: text("address").notNull(),
+  latitude: double("latitude"),
+  longitude: double("longitude"),
+  recipientName: varchar("recipientName", { length: 120 }),
+  recipientPhone: varchar("recipientPhone", { length: 32 }),
+  notes: text("notes"),
+  status: mysqlEnum("status", ["pending", "delivered", "skipped"]).notNull().default("pending"),
+  completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

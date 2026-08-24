@@ -19,6 +19,10 @@ export const deliveryOrderInput = z
     packageDescription: z.string().trim().max(800).optional(),
     packageSize: z.enum(["small", "medium", "large"]).default("small"),
     itemCount: z.number().int().min(1).max(50).default(1),
+    shipmentCategory: z.enum(["general", "food", "documents", "fragile", "medicine"]).default("general"),
+    declaredValue: z.number().int().min(0).max(100000).default(0),
+    requiresSignature: z.boolean().default(false),
+    additionalStops: z.array(z.object({ address: z.string().trim().min(5), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional(), recipientName: z.string().trim().max(120).optional(), recipientPhone: z.string().trim().max(32).optional(), notes: z.string().trim().max(500).optional() })).max(2).default([]),
     contactless: z.boolean().default(false),
     healthNotes: z.string().trim().max(500).optional(),
     paymentMethod: z.enum(["cash", "vodafone_cash"]).default("cash"),
@@ -38,10 +42,8 @@ export const deliveryOrderInput = z
 export type DeliveryOrderInput = z.infer<typeof deliveryOrderInput>;
 
 export function buildOperationalQuote(input: DeliveryOrderInput, pricingRules?: Partial<ServicePricingRules>) {
-  const distanceMeters = calculateDistanceMeters(
-    { latitude: input.pickupLatitude, longitude: input.pickupLongitude },
-    { latitude: input.destinationLatitude, longitude: input.destinationLongitude },
-  );
+  const points = [{ latitude: input.pickupLatitude, longitude: input.pickupLongitude }, ...(input.additionalStops ?? []).map((stop) => ({ latitude: stop.latitude, longitude: stop.longitude })), { latitude: input.destinationLatitude, longitude: input.destinationLongitude }];
+  const distanceMeters = points.slice(1).reduce((total, point, index) => total + calculateDistanceMeters(points[index]!, point), 0);
   return calculateOperationalQuote({ serviceType: input.serviceType, distanceMeters, requestedFor: input.requestedFor, pricingRules });
 }
 
