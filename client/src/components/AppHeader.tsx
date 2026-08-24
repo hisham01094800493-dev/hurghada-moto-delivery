@@ -1,8 +1,9 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { BrowserNotificationToggle } from "@/components/BrowserNotifications";
+import { CustomerSideMenu } from "@/components/CustomerSideMenu";
 import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
-import { LogIn, Menu, PackageCheck, Route } from "lucide-react";
+import { LogIn, PackageCheck, Route } from "lucide-react";
 import { Link } from "wouter";
 
 export default function AppHeader() {
@@ -40,9 +41,7 @@ export default function AppHeader() {
               <LogIn className="ml-2 h-4 w-4" /> دخول سريع / إنشاء حساب
             </Button>
           ))}
-          <Link href="/my-orders" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-800 md:hidden" aria-label="طلباتي">
-            <Menu className="h-5 w-5" />
-          </Link>
+          <CustomerSideMenu />
         </div>
       </div>
     </header>
