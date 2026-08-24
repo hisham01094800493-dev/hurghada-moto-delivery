@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { BrowserNotificationToggle } from "@/components/BrowserNotifications";
 import { CustomerSideMenu } from "@/components/CustomerSideMenu";
+import { ZoneNewsTicker } from "@/components/ZoneNewsTicker";
 import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Bell, LogIn, PackageCheck, Route } from "lucide-react";
@@ -45,6 +46,7 @@ export default function AppHeader() {
           <CustomerSideMenu />
         </div>
       </div>
+      <ZoneNewsTicker />
     </header>
   );
 }

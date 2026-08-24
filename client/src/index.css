@@ -34,6 +34,12 @@
 
 @media (prefers-reduced-motion: no-preference) {
   a, button { transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  .zone-news-track { animation: zone-news-ticker 28s linear infinite; }
+}
+
+@keyframes zone-news-ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 @media (min-width: 1280px) {

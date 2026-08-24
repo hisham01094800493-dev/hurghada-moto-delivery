@@ -24,7 +24,7 @@ export const adminNavigation: readonly NavigationItem[] = [
   { key: "admin-dashboard", label: "لوحة الإدارة", path: "/admin" },
   { key: "admin-operations", label: "مركز العمليات", path: "/admin/operations" },
   { key: "admin-drivers", label: "السائقون والتسعير", path: "/admin/drivers" },
-  { key: "admin-zones", label: "المناطق والرسوم", path: "/admin/zones" },
+  { key: "admin-zones", label: "إعدادات المناطق والرسوم", path: "/admin/settings/zones" },
   { key: "admin-verifications", label: "اعتماد السائقين", path: "/admin/verifications" },
   { key: "admin-coupons", label: "الكوبونات والعروض", path: "/admin/coupons" },
   { key: "admin-feedback", label: "التقييمات والشكاوى", path: "/admin/feedback" },
