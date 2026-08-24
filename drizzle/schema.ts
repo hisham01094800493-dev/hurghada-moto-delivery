@@ -1,4 +1,4 @@
-import { decimal, double, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { decimal, double, int, mysqlEnum, mysqlTable, text, timestamp, unique, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -27,6 +27,9 @@ export const drivers = mysqlTable("drivers", {
   totalTrips: int("totalTrips").notNull().default(0),
   totalEarnings: int("totalEarnings").notNull().default(0),
   commissionPercent: int("commissionPercent").notNull().default(10),
+  canAcceptOrders: int("canAcceptOrders").notNull().default(1),
+  canUpdateOrderStatus: int("canUpdateOrderStatus").notNull().default(1),
+  canUseDriverChat: int("canUseDriverChat").notNull().default(1),
   verificationStatus: mysqlEnum("verificationStatus", ["not_submitted", "pending", "approved", "rejected"]).notNull().default("not_submitted"),
   verificationNote: text("verificationNote"),
   verifiedByUserId: int("verifiedByUserId").references(() => users.id),
@@ -90,6 +93,17 @@ export const serviceZones = mysqlTable("service_zones", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const zoneRoutePrices = mysqlTable("zone_route_prices", {
+  id: int("id").autoincrement().primaryKey(),
+  fromZoneId: int("fromZoneId").notNull().references(() => serviceZones.id),
+  toZoneId: int("toZoneId").notNull().references(() => serviceZones.id),
+  fixedPrice: int("fixedPrice").notNull(),
+  isActive: int("isActive").notNull().default(1),
+  updatedByUserId: int("updatedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({ uniqueRouteDirection: unique().on(table.fromZoneId, table.toZoneId) }));
+
 export const savedAddresses = mysqlTable("saved_addresses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id),
@@ -136,6 +150,9 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   estimatedMinutes: int("estimatedMinutes").notNull().default(0),
   serviceZoneName: varchar("serviceZoneName", { length: 100 }),
   zoneSurcharge: int("zoneSurcharge").notNull().default(0),
+  routeFromZoneName: varchar("routeFromZoneName", { length: 100 }),
+  routeToZoneName: varchar("routeToZoneName", { length: 100 }),
+  routeFixedPrice: int("routeFixedPrice").notNull().default(0),
   fareBeforeDiscount: int("fareBeforeDiscount").notNull().default(0),
   estimatedFee: int("estimatedFee").notNull(),
   couponCode: varchar("couponCode", { length: 40 }),
@@ -153,6 +170,8 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   deliveredAt: timestamp("deliveredAt"),
   cancelledAt: timestamp("cancelledAt"),
   cancellationReason: text("cancellationReason"),
+  adminArchivedAt: timestamp("adminArchivedAt"),
+  adminArchivedByUserId: int("adminArchivedByUserId").references(() => users.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

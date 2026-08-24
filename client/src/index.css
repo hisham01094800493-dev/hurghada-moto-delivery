@@ -35,6 +35,7 @@
 @media (prefers-reduced-motion: no-preference) {
   a, button { transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
   .zone-news-track { animation: zone-news-ticker 28s linear infinite; }
+  .zone-news-pause:hover .zone-news-track, .zone-news-pause:focus .zone-news-track { animation-play-state: paused; }
 }
 
 @keyframes zone-news-ticker {

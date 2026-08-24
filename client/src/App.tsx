@@ -5,6 +5,7 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import AdminZones from "@/pages/AdminZones";
 import AdminOperations from "@/pages/AdminOperations";
 import AdminSettings from "@/pages/AdminSettings";
+import AdminRoutePrices from "@/pages/AdminRoutePrices";
 import AdminCoupons from "@/pages/AdminCoupons";
 import AdminDrivers from "@/pages/AdminDrivers";
 import AdminDriverVerifications from "@/pages/AdminDriverVerifications";
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/driver/verification" component={DriverVerification} />
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin/settings/zones" component={AdminZones} />
+      <Route path="/admin/settings/route-prices" component={AdminRoutePrices} />
       <Route path="/admin/zones" component={AdminZones} />
       <Route path="/admin/settings" component={AdminSettings} />
       <Route path="/admin/operations" component={AdminOperations} />
