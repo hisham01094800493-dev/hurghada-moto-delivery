@@ -7,7 +7,7 @@ import { BadgeCheck, BarChart3, Bike, CircleHelp, ClipboardList, FileWarning, Fl
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
-const icons = { home: Home, "new-order": PackagePlus, orders: ClipboardList, account: Settings2, support: CircleHelp, "driver-orders": Bike, "driver-earnings": WalletCards, "driver-verification": BadgeCheck, "admin-dashboard": ShieldCheck, "admin-drivers": BarChart3, "admin-verifications": UserRoundCheck, "admin-coupons": Gift, "admin-feedback": Flag, "admin-audit": FileWarning };
+const icons = { home: Home, "new-order": PackagePlus, orders: ClipboardList, account: Settings2, support: CircleHelp, "driver-orders": Bike, "driver-earnings": WalletCards, "driver-verification": BadgeCheck, "admin-dashboard": ShieldCheck, "admin-drivers": BarChart3, "admin-zones": MapPin, "admin-verifications": UserRoundCheck, "admin-coupons": Gift, "admin-feedback": Flag, "admin-audit": FileWarning };
 const statusLabels: Record<string, string> = { new: "جارٍ البحث عن سائق", assigned: "تم قبول السائق", driver_arrived: "السائق وصل", picked_up: "تم الاستلام", in_delivery: "جاري التوصيل" };
 
 function MenuLinks({ items, location, onNavigate, unreadTotal, driverInviteCount }: { items: readonly NavigationItem[]; location: string; onNavigate?: () => void; unreadTotal: number; driverInviteCount: number }) {

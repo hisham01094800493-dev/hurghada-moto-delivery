@@ -62,5 +62,7 @@ describe("operational roles", () => {
     await expect(caller.admin.createCoupon({ code: "WELCOME20", discountType: "percent", discountValue: 20 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.driverVerifications()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.reviewDriverVerification({ driverId: 1, status: "approved" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.zones()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.createZone({ name: "المنطقة التجريبية", centerLatitude: 27.25, centerLongitude: 33.81, radiusMeters: 1000, surcharge: 5 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

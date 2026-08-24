@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, coupons, deliveryComplaints, deliveryOrders, deliveryStops, driverDocuments, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, shipmentAttachments, users } from "../drizzle/schema";
+import { chatMessages, coupons, deliveryComplaints, deliveryOrders, deliveryStops, driverDocuments, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, serviceZones, shipmentAttachments, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
@@ -58,6 +58,28 @@ export async function updateServicePricingRule(input: { serviceType: DeliverySer
   const rule = normalized[input.serviceType];
   await db.insert(servicePricingRules).values({ serviceType: input.serviceType, ...rule, updatedByUserId: input.updatedByUserId }).onDuplicateKeyUpdate({ set: { ...rule, updatedByUserId: input.updatedByUserId } });
   return getServicePricingRuleMap();
+}
+
+export async function getActiveServiceZones() { const db = await getDb(); if (!db) return []; return db.select().from(serviceZones).where(eq(serviceZones.isActive, 1)).orderBy(desc(serviceZones.updatedAt)); }
+export async function getAdminServiceZones() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(serviceZones).orderBy(desc(serviceZones.updatedAt)); }
+
+export async function resolveServiceZone(latitude?: number | null, longitude?: number | null) {
+  if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) return null;
+  const zones = await getActiveServiceZones();
+  const matches = zones.map((zone) => ({ zone, distance: calculateDistanceMeters(latitude, longitude, zone.centerLatitude, zone.centerLongitude) })).filter(({ zone, distance }) => distance <= zone.radiusMeters).sort((a, b) => a.distance - b.distance);
+  return matches[0]?.zone || null;
+}
+
+export async function createServiceZone(input: { name: string; centerLatitude: number; centerLongitude: number; radiusMeters: number; surcharge: number; updatedByUserId: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.insert(serviceZones).values({ ...input, name: input.name.trim(), radiusMeters: Math.max(100, Math.round(input.radiusMeters)), surcharge: Math.max(0, Math.round(input.surcharge)), isActive: 1 });
+  return getAdminServiceZones();
+}
+
+export async function updateServiceZone(input: { zoneId: number; name: string; centerLatitude: number; centerLongitude: number; radiusMeters: number; surcharge: number; isActive: boolean; updatedByUserId: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.update(serviceZones).set({ name: input.name.trim(), centerLatitude: input.centerLatitude, centerLongitude: input.centerLongitude, radiusMeters: Math.max(100, Math.round(input.radiusMeters)), surcharge: Math.max(0, Math.round(input.surcharge)), isActive: input.isActive ? 1 : 0, updatedByUserId: input.updatedByUserId }).where(eq(serviceZones.id, input.zoneId));
+  return getAdminServiceZones();
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
