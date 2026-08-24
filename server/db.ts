@@ -1,10 +1,12 @@
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, deliveryOrders, driverOrderInvitations, drivers, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, users } from "../drizzle/schema";
+import { chatMessages, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
 import { buildDailyDeliveryReport } from "../shared/reporting";
+import { calculatePlatformCommission, defaultServicePricingRules, DeliveryServiceType, normalizeServicePricingRules, ServicePricingRules } from "../shared/delivery";
+import { calculateAvailableWithdrawalBalance } from "../shared/driver-finance";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -13,6 +15,25 @@ export async function getDb() {
     try { _db = drizzle(process.env.DATABASE_URL); } catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; }
   }
   return _db;
+}
+
+export async function getServicePricingRuleMap(): Promise<ServicePricingRules> {
+  const db = await getDb();
+  if (!db) return defaultServicePricingRules;
+  const rows = await db.select().from(servicePricingRules);
+  const overrides = rows.reduce((rules, rule) => {
+    rules[rule.serviceType] = { baseFare: rule.baseFare, perKmFare: rule.perKmFare, minimumFare: rule.minimumFare };
+    return rules;
+  }, {} as Partial<ServicePricingRules>);
+  return normalizeServicePricingRules(overrides);
+}
+
+export async function updateServicePricingRule(input: { serviceType: DeliveryServiceType; baseFare: number; perKmFare: number; minimumFare: number; updatedByUserId: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const normalized = normalizeServicePricingRules({ [input.serviceType]: input });
+  const rule = normalized[input.serviceType];
+  await db.insert(servicePricingRules).values({ serviceType: input.serviceType, ...rule, updatedByUserId: input.updatedByUserId }).onDuplicateKeyUpdate({ set: { ...rule, updatedByUserId: input.updatedByUserId } });
+  return getServicePricingRuleMap();
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -141,10 +162,11 @@ export async function updateDriverOrderStatus(orderId: number, driverId: number,
   if (!canEnterDriverOperations(target)) throw new Error("لا يمكن تحديث الطلب قبل اعتماد الدفع.");
   validateDriverStatusUpdate({ assignedDriverId: target.driverId, actingDriverId: driverId, currentStatus: target.status, nextStatus: status });
   const dateField = { driver_arrived: { driverArrivedAt: new Date() }, picked_up: { pickedUpAt: new Date() }, in_delivery: { deliveryStartedAt: new Date() }, delivered: { deliveredAt: new Date() } }[status];
-  await db.update(deliveryOrders).set({ status, ...dateField }).where(eq(deliveryOrders.id, orderId));
+  const driver = status === "delivered" ? await getDriverById(driverId) : undefined;
+  const allocation = status === "delivered" && driver ? calculatePlatformCommission(target.estimatedFee, driver.commissionPercent) : undefined;
+  await db.update(deliveryOrders).set({ status, ...dateField, ...(allocation ? { platformCommissionAmount: allocation.platformCommissionAmount, driverEarnings: allocation.driverEarnings } : {}) }).where(eq(deliveryOrders.id, orderId));
   if (status === "delivered") {
-    const driver = await getDriverById(driverId);
-    if (driver) await db.update(drivers).set({ availability: "online", totalTrips: driver.totalTrips + 1, totalEarnings: driver.totalEarnings + target.estimatedFee }).where(eq(drivers.id, driverId));
+    if (driver && allocation) await db.update(drivers).set({ availability: "online", totalTrips: driver.totalTrips + 1, totalEarnings: driver.totalEarnings + allocation.driverEarnings }).where(eq(drivers.id, driverId));
   }
   const notes = { driver_arrived: "وصل المندوب إلى موقع الاستلام", picked_up: "تم استلام الطلب", in_delivery: "بدأ المندوب التوصيل", delivered: "تم تسليم الطلب" } as const;
   await db.insert(orderEvents).values({ orderId, eventType: status, status, note: notes[status], actorUserId });
@@ -162,14 +184,58 @@ export async function getAdminDailyReport(targetDate = new Date()) {
 export async function getAdminSummary() {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const [orders, driverRows] = await Promise.all([db.select().from(deliveryOrders), db.select().from(drivers)]);
-  return { totalOrders: orders.length, activeOrders: orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length, deliveredOrders: orders.filter((order) => order.status === "delivered").length, cancelledOrders: orders.filter((order) => order.status === "cancelled").length, onlineDrivers: driverRows.filter((driver) => driver.availability === "online" || driver.availability === "busy").length, offlineDrivers: driverRows.filter((driver) => driver.availability === "offline").length, estimatedRevenue: orders.filter((order) => order.status === "delivered").reduce((sum, order) => sum + order.estimatedFee, 0) };
+  const deliveredOrders = orders.filter((order) => order.status === "delivered");
+  return { totalOrders: orders.length, activeOrders: orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length, deliveredOrders: deliveredOrders.length, cancelledOrders: orders.filter((order) => order.status === "cancelled").length, onlineDrivers: driverRows.filter((driver) => driver.availability === "online" || driver.availability === "busy").length, offlineDrivers: driverRows.filter((driver) => driver.availability === "offline").length, estimatedRevenue: deliveredOrders.reduce((sum, order) => sum + order.estimatedFee, 0), platformRevenue: deliveredOrders.reduce((sum, order) => sum + order.platformCommissionAmount, 0), driverNetEarnings: deliveredOrders.reduce((sum, order) => sum + order.driverEarnings, 0) };
 }
 
 export async function getAdminDrivers() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(drivers).orderBy(desc(drivers.updatedAt)); }
 export async function getAdminUsers() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, role: users.role, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt)); }
-export async function createDriverForUser(input: { userId: number; displayName: string; phone: string; vehicleType: string; vehiclePlate?: string }) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(users).set({ role: "driver" }).where(eq(users.id, input.userId)); await db.insert(drivers).values({ ...input, vehiclePlate: input.vehiclePlate || null, availability: "offline" }); return getDriverByUserId(input.userId); }
+export async function createDriverForUser(input: { userId: number; displayName: string; phone: string; vehicleType: string; vehiclePlate?: string; commissionPercent?: number }) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(users).set({ role: "driver" }).where(eq(users.id, input.userId)); await db.insert(drivers).values({ ...input, commissionPercent: Math.min(80, Math.max(0, input.commissionPercent ?? 10)), vehiclePlate: input.vehiclePlate || null, availability: "offline" }); return getDriverByUserId(input.userId); }
 export async function setDriverAdminStatus(driverId: number, availability: "offline" | "online" | "suspended") { return updateDriverAvailability(driverId, availability); }
+export async function setDriverCommissionPercent(driverId: number, commissionPercent: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const normalized = Math.min(80, Math.max(0, Math.round(commissionPercent))); await db.update(drivers).set({ commissionPercent: normalized }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
 export async function getAdminOrders() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).orderBy(desc(deliveryOrders.createdAt)); }
+
+async function getDriverFinancialSummaryById(driverId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [driver, orders, withdrawals] = await Promise.all([
+    getDriverById(driverId),
+    db.select().from(deliveryOrders).where(and(eq(deliveryOrders.driverId, driverId), eq(deliveryOrders.status, "delivered"))).orderBy(desc(deliveryOrders.deliveredAt)),
+    db.select().from(driverWithdrawalRequests).where(eq(driverWithdrawalRequests.driverId, driverId)).orderBy(desc(driverWithdrawalRequests.createdAt)),
+  ]);
+  if (!driver) throw new Error("ملف المندوب غير موجود.");
+  const grossFee = orders.reduce((sum, order) => sum + order.estimatedFee, 0);
+  const platformCommission = orders.reduce((sum, order) => sum + order.platformCommissionAmount, 0);
+  const netEarnings = orders.reduce((sum, order) => sum + order.driverEarnings, 0);
+  const { committedWithdrawals, availableToWithdraw } = calculateAvailableWithdrawalBalance(netEarnings, withdrawals);
+  return { driver, grossFee, platformCommission, netEarnings, committedWithdrawals, availableToWithdraw, orders, withdrawals };
+}
+
+export async function getDriverFinancialSummary(userId: number) { const driver = await getDriverByUserId(userId); if (!driver) throw new Error("لا يوجد ملف مندوب مرتبط بهذا الحساب."); return getDriverFinancialSummaryById(driver.id); }
+
+export async function requestDriverWithdrawal(input: { userId: number; amount: number; note?: string }) {
+  const summary = await getDriverFinancialSummary(input.userId);
+  if (!Number.isInteger(input.amount) || input.amount <= 0 || input.amount > summary.availableToWithdraw) throw new Error("قيمة طلب السحب يجب أن تكون ضمن الرصيد المتاح.");
+  if (summary.withdrawals.some((withdrawal) => withdrawal.status === "pending")) throw new Error("لديك طلب سحب قيد المراجعة بالفعل.");
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  await db.insert(driverWithdrawalRequests).values({ driverId: summary.driver.id, amount: input.amount, note: input.note?.trim() || null, status: "pending" });
+  return getDriverFinancialSummary(input.userId);
+}
+
+export async function getAdminWithdrawalRequests() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [withdrawals, driverRows] = await Promise.all([db.select().from(driverWithdrawalRequests).orderBy(desc(driverWithdrawalRequests.createdAt)), db.select().from(drivers)]);
+  return withdrawals.map((withdrawal) => ({ ...withdrawal, driver: driverRows.find((driver) => driver.id === withdrawal.driverId) || null }));
+}
+
+export async function reviewDriverWithdrawal(input: { withdrawalId: number; status: "approved" | "rejected" | "paid"; adminUserId: number; adminNote?: string }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const withdrawal = (await db.select().from(driverWithdrawalRequests).where(eq(driverWithdrawalRequests.id, input.withdrawalId)).limit(1))[0];
+  if (!withdrawal) throw new Error("طلب السحب غير موجود.");
+  if (withdrawal.status === "paid" || withdrawal.status === "rejected") throw new Error("لا يمكن مراجعة طلب مغلق.");
+  if (input.status === "paid" && withdrawal.status !== "approved") throw new Error("اعتمد الطلب أولًا قبل تسجيله كمدفوع.");
+  await db.update(driverWithdrawalRequests).set({ status: input.status, adminNote: input.adminNote?.trim() || null, reviewedByUserId: input.adminUserId, reviewedAt: new Date(), ...(input.status === "paid" ? { paidAt: new Date() } : {}) }).where(eq(driverWithdrawalRequests.id, input.withdrawalId));
+  return getAdminWithdrawalRequests();
+}
 
 export async function getProfileWithAddresses(userId: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");

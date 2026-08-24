@@ -1,4 +1,4 @@
-import { calculateDistanceMeters, calculateOperationalQuote, deliveryServiceTypes } from "@shared/delivery";
+import { calculateDistanceMeters, calculateOperationalQuote, deliveryServiceTypes, ServicePricingRules } from "@shared/delivery";
 import { z } from "zod";
 
 export const deliveryOrderInput = z
@@ -36,12 +36,12 @@ export const deliveryOrderInput = z
 
 export type DeliveryOrderInput = z.infer<typeof deliveryOrderInput>;
 
-export function buildOperationalQuote(input: DeliveryOrderInput) {
+export function buildOperationalQuote(input: DeliveryOrderInput, pricingRules?: Partial<ServicePricingRules>) {
   const distanceMeters = calculateDistanceMeters(
     { latitude: input.pickupLatitude, longitude: input.pickupLongitude },
     { latitude: input.destinationLatitude, longitude: input.destinationLongitude },
   );
-  return calculateOperationalQuote({ serviceType: input.serviceType, distanceMeters, requestedFor: input.requestedFor });
+  return calculateOperationalQuote({ serviceType: input.serviceType, distanceMeters, requestedFor: input.requestedFor, pricingRules });
 }
 
 export function makeOrderReference(now = Date.now()) {

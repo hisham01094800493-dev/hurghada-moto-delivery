@@ -57,6 +57,20 @@
       "when": 1787516930537,
       "tag": "0007_safe_trish_tilby",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787585107455,
+      "tag": "0008_acoustic_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1787585453112,
+      "tag": "0009_regular_champions",
+      "breakpoints": true
     }
   ]
 }

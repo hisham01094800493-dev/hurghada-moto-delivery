@@ -35,3 +35,11 @@
 @media (prefers-reduced-motion: no-preference) {
   a, button { transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
 }
+
+@media (min-width: 1280px) {
+  html.customer-navigation-pinned main.container {
+    max-width: calc(100% - 19rem);
+    margin-right: 19rem;
+    margin-left: 0;
+  }
+}

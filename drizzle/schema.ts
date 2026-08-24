@@ -26,6 +26,32 @@ export const drivers = mysqlTable("drivers", {
   lastLocationAt: timestamp("lastLocationAt"),
   totalTrips: int("totalTrips").notNull().default(0),
   totalEarnings: int("totalEarnings").notNull().default(0),
+  commissionPercent: int("commissionPercent").notNull().default(10),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const driverWithdrawalRequests = mysqlTable("driver_withdrawal_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  amount: int("amount").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "paid"]).default("pending").notNull(),
+  note: text("note"),
+  adminNote: text("adminNote"),
+  reviewedByUserId: int("reviewedByUserId").references(() => users.id),
+  reviewedAt: timestamp("reviewedAt"),
+  paidAt: timestamp("paidAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const servicePricingRules = mysqlTable("service_pricing_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  serviceType: mysqlEnum("serviceType", ["person", "parcel", "documents", "items", "other"]).notNull().unique(),
+  baseFare: int("baseFare").notNull(),
+  perKmFare: int("perKmFare").notNull(),
+  minimumFare: int("minimumFare").notNull(),
+  updatedByUserId: int("updatedByUserId").references(() => users.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -69,6 +95,8 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   distanceMeters: int("distanceMeters").notNull().default(0),
   estimatedMinutes: int("estimatedMinutes").notNull().default(0),
   estimatedFee: int("estimatedFee").notNull(),
+  platformCommissionAmount: int("platformCommissionAmount").notNull().default(0),
+  driverEarnings: int("driverEarnings").notNull().default(0),
   paymentMethod: mysqlEnum("paymentMethod", ["cash", "vodafone_cash"]).default("cash").notNull(),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "verifying", "paid", "failed"]).default("pending").notNull(),
   paymentReference: varchar("paymentReference", { length: 64 }),

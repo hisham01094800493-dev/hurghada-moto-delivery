@@ -2,9 +2,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Booking from "@/pages/Booking";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminDrivers from "@/pages/AdminDrivers";
 import AdminAuditLog from "@/pages/AdminAuditLog";
 import AdminSupport from "@/pages/AdminSupport";
 import DriverDashboard from "@/pages/DriverDashboard";
+import DriverEarnings from "@/pages/DriverEarnings";
 import Home from "@/pages/Home";
 import MyOrders from "@/pages/MyOrders";
 import NotFound from "@/pages/NotFound";
@@ -27,7 +29,9 @@ function Router() {
       <Route path="/settings" component={Profile} />
       <Route path="/support" component={Support} />
       <Route path="/track/:reference" component={TrackOrder} />
+      <Route path="/driver/earnings" component={DriverEarnings} />
       <Route path="/driver" component={DriverDashboard} />
+      <Route path="/admin/drivers" component={AdminDrivers} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/audit" component={AdminAuditLog} />
       <Route path="/admin/support" component={AdminSupport} />

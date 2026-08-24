@@ -50,4 +50,11 @@ describe("operational roles", () => {
     const caller = appRouter.createCaller(makeContext(ordinaryUser));
     await expect(caller.admin.verifyPayment({ orderId: 1, status: "paid" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("rejects pricing, commission, and withdrawal review updates for a non-admin account", async () => {
+    const caller = appRouter.createCaller(makeContext(ordinaryUser));
+    await expect(caller.admin.updatePricingRule({ serviceType: "person", baseFare: 30, perKmFare: 5, minimumFare: 35 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.updateDriverCommission({ driverId: 1, commissionPercent: 10 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.reviewWithdrawal({ withdrawalId: 1, status: "approved" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
