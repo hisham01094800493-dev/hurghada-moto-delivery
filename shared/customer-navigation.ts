@@ -1,7 +1,7 @@
 export type NavigationRole = "user" | "driver" | "admin" | null | undefined;
 
 export type NavigationItem = {
-  key: "home" | "new-order" | "orders" | "account" | "support" | "driver-orders" | "driver-earnings" | "admin-dashboard" | "admin-drivers" | "admin-coupons" | "admin-feedback" | "admin-audit";
+  key: "home" | "new-order" | "orders" | "account" | "support" | "driver-orders" | "driver-earnings" | "driver-verification" | "admin-dashboard" | "admin-drivers" | "admin-verifications" | "admin-coupons" | "admin-feedback" | "admin-audit";
   label: string;
   path: string;
 };
@@ -16,12 +16,14 @@ export const customerNavigation: readonly NavigationItem[] = [
 
 export const driverNavigation: readonly NavigationItem[] = [
   { key: "driver-orders", label: "الطلبات المتاحة", path: "/driver" },
-  { key: "driver-earnings", label: "أرباحي", path: "/driver/earnings" },
+  { key: "driver-earnings", label: "الأرباح والسحب", path: "/driver/earnings" },
+  { key: "driver-verification", label: "اعتماد الحساب", path: "/driver/verification" },
 ];
 
 export const adminNavigation: readonly NavigationItem[] = [
   { key: "admin-dashboard", label: "لوحة الإدارة", path: "/admin" },
   { key: "admin-drivers", label: "السائقون والتسعير", path: "/admin/drivers" },
+  { key: "admin-verifications", label: "اعتماد السائقين", path: "/admin/verifications" },
   { key: "admin-coupons", label: "الكوبونات والعروض", path: "/admin/coupons" },
   { key: "admin-feedback", label: "التقييمات والشكاوى", path: "/admin/feedback" },
   { key: "admin-audit", label: "سجل التدقيق", path: "/admin/audit" },

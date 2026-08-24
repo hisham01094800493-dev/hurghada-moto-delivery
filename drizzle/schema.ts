@@ -27,6 +27,10 @@ export const drivers = mysqlTable("drivers", {
   totalTrips: int("totalTrips").notNull().default(0),
   totalEarnings: int("totalEarnings").notNull().default(0),
   commissionPercent: int("commissionPercent").notNull().default(10),
+  verificationStatus: mysqlEnum("verificationStatus", ["not_submitted", "pending", "approved", "rejected"]).notNull().default("not_submitted"),
+  verificationNote: text("verificationNote"),
+  verifiedByUserId: int("verifiedByUserId").references(() => users.id),
+  verifiedAt: timestamp("verifiedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -149,6 +153,29 @@ export const deliveryStops = mysqlTable("delivery_stops", {
   completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const shipmentAttachments = mysqlTable("shipment_attachments", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().references(() => deliveryOrders.id),
+  uploaderUserId: int("uploaderUserId").notNull().references(() => users.id),
+  attachmentType: mysqlEnum("attachmentType", ["shipment_photo", "proof_of_delivery", "other"]).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileName: varchar("fileName", { length: 160 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }).notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const driverDocuments = mysqlTable("driver_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  documentType: mysqlEnum("documentType", ["national_id", "driver_license", "vehicle_registration", "selfie"]).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileName: varchar("fileName", { length: 160 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }).notNull(),
+  sizeBytes: int("sizeBytes").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export const orderReviews = mysqlTable("order_reviews", {

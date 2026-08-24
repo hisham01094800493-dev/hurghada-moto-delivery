@@ -4,11 +4,13 @@ import Booking from "@/pages/Booking";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminCoupons from "@/pages/AdminCoupons";
 import AdminDrivers from "@/pages/AdminDrivers";
+import AdminDriverVerifications from "@/pages/AdminDriverVerifications";
 import AdminFeedback from "@/pages/AdminFeedback";
 import AdminAuditLog from "@/pages/AdminAuditLog";
 import AdminSupport from "@/pages/AdminSupport";
 import DriverDashboard from "@/pages/DriverDashboard";
 import DriverEarnings from "@/pages/DriverEarnings";
+import DriverVerification from "@/pages/DriverVerification";
 import Home from "@/pages/Home";
 import MyOrders from "@/pages/MyOrders";
 import NotFound from "@/pages/NotFound";
@@ -21,6 +23,7 @@ import { BookingCouponBar } from "./components/BookingCouponBar";
 import { ShipmentDetailsDock } from "./components/ShipmentDetailsDock";
 import { OrderStopsPanel } from "./components/OrderStopsPanel";
 import { DriverStopsPanel } from "./components/DriverStopsPanel";
+import { ShipmentAttachmentDock } from "./components/ShipmentAttachmentDock";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -37,8 +40,10 @@ function Router() {
       <Route path="/support" component={Support} />
       <Route path="/track/:reference" component={TrackOrder} />
       <Route path="/driver/earnings" component={DriverEarnings} />
+      <Route path="/driver/verification" component={DriverVerification} />
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin/drivers" component={AdminDrivers} />
+      <Route path="/admin/verifications" component={AdminDriverVerifications} />
       <Route path="/admin/coupons" component={AdminCoupons} />
       <Route path="/admin/feedback" component={AdminFeedback} />
       <Route path="/admin" component={AdminDashboard} />
@@ -62,6 +67,7 @@ export default function App() {
           <ShipmentDetailsDock />
           <OrderStopsPanel />
           <DriverStopsPanel />
+          <ShipmentAttachmentDock />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, coupons, deliveryComplaints, deliveryOrders, deliveryStops, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
+import { chatMessages, coupons, deliveryComplaints, deliveryOrders, deliveryStops, driverDocuments, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, shipmentAttachments, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
@@ -123,7 +123,62 @@ export async function getDeliveryOrderWithEventsForUser(reference: string, userI
   return { order, events, stops, driver };
 }
 
+export async function getShipmentAttachmentsForCustomer(reference: string, userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(and(eq(deliveryOrders.reference, reference), eq(deliveryOrders.userId, userId))).limit(1))[0];
+  if (!order) throw new Error("لا يمكنك الوصول إلى مرفقات هذا الطلب.");
+  return db.select().from(shipmentAttachments).where(eq(shipmentAttachments.orderId, order.id)).orderBy(desc(shipmentAttachments.createdAt));
+}
+
+export async function saveShipmentAttachment(input: { orderId: number; uploaderUserId: number; attachmentType: "shipment_photo" | "proof_of_delivery" | "other"; fileUrl: string; fileName: string; mimeType: string; sizeBytes: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, input.orderId)).limit(1))[0];
+  if (!order) throw new Error("الطلب غير موجود.");
+  const driver = await getDriverByUserId(input.uploaderUserId);
+  const isCustomer = order.userId === input.uploaderUserId;
+  const isAssignedDriver = Boolean(driver && order.driverId === driver.id);
+  if (!isCustomer && !isAssignedDriver) throw new Error("لا يمكنك رفع ملف لهذا الطلب.");
+  if (input.attachmentType === "proof_of_delivery" && !isAssignedDriver) throw new Error("إثبات التسليم يرفعه المندوب المكلّف فقط.");
+  if (input.attachmentType === "shipment_photo" && !isCustomer) throw new Error("صورة الشحنة يرفعها العميل صاحب الطلب فقط.");
+  await db.insert(shipmentAttachments).values(input);
+  if (isCustomer && order.driverId) { const assigned = await getDriverById(order.driverId); if (assigned) await db.insert(notifications).values({ userId: assigned.userId, orderId: order.id, title: "مرفق شحنة جديد", body: "أضاف العميل صورة أو ملفًا متعلقًا بالطلب." }); }
+  if (isAssignedDriver) await db.insert(notifications).values({ userId: order.userId, orderId: order.id, title: "مرفق من المندوب", body: input.attachmentType === "proof_of_delivery" ? "أضاف المندوب إثبات التسليم." : "أضاف المندوب ملفًا متعلقًا بالطلب." });
+  return db.select().from(shipmentAttachments).where(eq(shipmentAttachments.orderId, order.id)).orderBy(desc(shipmentAttachments.createdAt));
+}
+
 export async function getDriverByUserId(userId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1))[0]; }
+
+export async function getOwnDriverVerification(userId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(userId); if (!driver) throw new Error("لا يوجد ملف مندوب مرتبط بهذا الحساب.");
+  const documents = await db.select().from(driverDocuments).where(eq(driverDocuments.driverId, driver.id)).orderBy(desc(driverDocuments.createdAt));
+  return { driver, documents };
+}
+
+export async function saveDriverDocument(input: { userId: number; documentType: "national_id" | "driver_license" | "vehicle_registration" | "selfie"; fileUrl: string; fileName: string; mimeType: string; sizeBytes: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverByUserId(input.userId); if (!driver) throw new Error("لا يوجد ملف مندوب مرتبط بهذا الحساب.");
+  await db.insert(driverDocuments).values({ driverId: driver.id, documentType: input.documentType, fileUrl: input.fileUrl, fileName: input.fileName, mimeType: input.mimeType, sizeBytes: input.sizeBytes });
+  await db.update(drivers).set({ verificationStatus: "pending", verificationNote: null, verifiedByUserId: null, verifiedAt: null }).where(eq(drivers.id, driver.id));
+  return getOwnDriverVerification(input.userId);
+}
+
+export async function getAdminDriverVerifications() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [driverRows, documents] = await Promise.all([db.select().from(drivers).orderBy(desc(drivers.updatedAt)), db.select().from(driverDocuments).orderBy(desc(driverDocuments.createdAt))]);
+  return driverRows.map((driver) => ({ ...driver, documents: documents.filter((document) => document.driverId === driver.id) }));
+}
+
+export async function reviewDriverVerification(input: { driverId: number; status: "approved" | "rejected"; adminNote?: string; adminUserId: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driver = await getDriverById(input.driverId); if (!driver) throw new Error("ملف المندوب غير موجود.");
+  const documents = await db.select().from(driverDocuments).where(eq(driverDocuments.driverId, driver.id));
+  const required = ["national_id", "driver_license", "vehicle_registration", "selfie"];
+  if (input.status === "approved" && !required.every((type) => documents.some((document) => document.documentType === type))) throw new Error("أكمل المستندات الأربعة المطلوبة قبل الاعتماد.");
+  await db.update(drivers).set({ verificationStatus: input.status, verificationNote: input.adminNote?.trim() || null, verifiedByUserId: input.adminUserId, verifiedAt: new Date() }).where(eq(drivers.id, driver.id));
+  await db.insert(notifications).values({ userId: driver.userId, title: "تحديث اعتماد الحساب", body: input.status === "approved" ? "تم اعتماد ملفك كسائق. يمكنك الآن تفعيل التوفر." : "تحتاج مستنداتك إلى مراجعة أو استكمال؛ راجع ملاحظة الإدارة." });
+  return getAdminDriverVerifications();
+}
 
 export async function getNewOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const invitations = await db.select().from(driverOrderInvitations).where(and(eq(driverOrderInvitations.driverId, driverId), eq(driverOrderInvitations.status, "pending"))); const orderIds = invitations.filter((invitation) => invitation.expiresAt > new Date()).map((invitation) => invitation.orderId); if (!orderIds.length) return []; const orders = await db.select().from(deliveryOrders).where(and(inArray(deliveryOrders.id, orderIds), eq(deliveryOrders.status, "new"))).orderBy(desc(deliveryOrders.createdAt)); return orders.filter(canEnterDriverOperations); }
 
