@@ -17,21 +17,27 @@ describe("customer cancellation", () => {
   });
 
   it("cancels only the customer's pending or assigned order and records the reason", async () => {
-    await cancelOrderForCustomer(baseOrder.reference, 7, "تغيير الخطة");
+    await cancelOrderForCustomer(baseOrder.reference, 7, "تغيير موعد أو عنوان الطلب");
     expect(fakeDb.update).toHaveBeenCalled();
     expect(fakeDb.insert).toHaveBeenCalledTimes(2);
     const firstInsert = fakeDb.insert.mock.results[0]?.value.values;
-    expect(firstInsert).toHaveBeenCalledWith(expect.objectContaining({ eventType: "cancelled", note: "تغيير الخطة" }));
+    expect(firstInsert).toHaveBeenCalledWith(expect.objectContaining({ eventType: "cancelled", note: "تغيير موعد أو عنوان الطلب" }));
   });
 
   it("rejects cancellation for another customer", async () => {
-    await expect(cancelOrderForCustomer(baseOrder.reference, 99)).rejects.toThrow("لا يمكنك إلغاء هذا الطلب");
+    await expect(cancelOrderForCustomer(baseOrder.reference, 99, "لم أعد بحاجة إلى التوصيل")).rejects.toThrow("لا يمكنك إلغاء هذا الطلب");
     expect(fakeDb.update).not.toHaveBeenCalled();
   });
 
   it("rejects cancellation after pickup or delivery has started", async () => {
     fakeDb.select.mockReturnValue({ from: () => ({ where: () => ({ limit: async () => [{ ...baseOrder, status: "picked_up" }] }) }) });
-    await expect(cancelOrderForCustomer(baseOrder.reference, 7)).rejects.toThrow("لا يمكن إلغاء الطلب بعد استلامه");
+    await expect(cancelOrderForCustomer(baseOrder.reference, 7, "لم أعد بحاجة إلى التوصيل")).rejects.toThrow("لا يمكن إلغاء الطلب بعد استلامه");
+    expect(fakeDb.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty or unsupported cancellation reason", async () => {
+    await expect(cancelOrderForCustomer(baseOrder.reference, 7, "")).rejects.toThrow("اختر سببًا صالحًا");
+    await expect(cancelOrderForCustomer(baseOrder.reference, 7, "سبب حر غير معتمد")).rejects.toThrow("اختر سببًا صالحًا");
     expect(fakeDb.update).not.toHaveBeenCalled();
   });
 });

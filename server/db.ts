@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { chatMessages, deliveryOrders, driverOrderInvitations, drivers, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
+import { isCancellationReason } from "../shared/cancellation";
 import { buildDailyDeliveryReport } from "../shared/reporting";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -115,12 +116,13 @@ export async function rejectOrderInvitation(orderId: number, driverId: number) {
   return { success: true } as const;
 }
 
-export async function cancelOrderForCustomer(reference: string, customerUserId: number, reason?: string) {
+export async function cancelOrderForCustomer(reference: string, customerUserId: number, reason: string) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];
   if (!target || target.userId !== customerUserId) throw new Error("لا يمكنك إلغاء هذا الطلب.");
   if (!["new", "assigned", "driver_arrived"].includes(target.status)) throw new Error("لا يمكن إلغاء الطلب بعد استلامه أو بدء التوصيل. تواصل مع الدعم للمساعدة.");
-  const cancellationReason = reason?.trim().slice(0, 500) || "تم الإلغاء من العميل";
+  const cancellationReason = reason.trim();
+  if (!isCancellationReason(cancellationReason)) throw new Error("اختر سببًا صالحًا من قائمة الإلغاء.");
   const updated = await db.update(deliveryOrders).set({ status: "cancelled", cancelledAt: new Date(), cancellationReason }).where(and(eq(deliveryOrders.id, target.id), inArray(deliveryOrders.status, ["new", "assigned", "driver_arrived"]))) as any;
   if (!updated[0]?.affectedRows) throw new Error("تعذر إلغاء الطلب؛ ربما تغيرت حالته.");
   await db.update(driverOrderInvitations).set({ status: "cancelled", respondedAt: new Date() }).where(and(eq(driverOrderInvitations.orderId, target.id), eq(driverOrderInvitations.status, "pending")));
