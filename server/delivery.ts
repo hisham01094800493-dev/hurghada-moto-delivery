@@ -23,6 +23,7 @@ export const deliveryOrderInput = z
     healthNotes: z.string().trim().max(500).optional(),
     paymentMethod: z.enum(["cash", "vodafone_cash"]).default("cash"),
     paymentReference: z.string().trim().regex(/^[A-Za-z0-9_-]{6,64}$/, "رقم العملية غير صالح.").optional(),
+    couponCode: z.string().trim().regex(/^[A-Za-z0-9_-]{3,40}$/, "كود الخصم غير صالح.").optional(),
   })
   .superRefine((value, ctx) => {
     if (Number.isNaN(new Date(value.requestedFor).getTime())) ctx.addIssue({ code: "custom", path: ["requestedFor"], message: "وقت الطلب غير صالح." });

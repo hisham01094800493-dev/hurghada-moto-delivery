@@ -58,5 +58,7 @@ describe("operational roles", () => {
     await expect(caller.admin.reviewWithdrawal({ withdrawalId: 1, status: "approved" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.feedback()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.reviewComplaint({ complaintId: 1, status: "in_review" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.coupons()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.createCoupon({ code: "WELCOME20", discountType: "percent", discountValue: 20 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

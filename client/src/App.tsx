@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Booking from "@/pages/Booking";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminCoupons from "@/pages/AdminCoupons";
 import AdminDrivers from "@/pages/AdminDrivers";
 import AdminFeedback from "@/pages/AdminFeedback";
 import AdminAuditLog from "@/pages/AdminAuditLog";
@@ -16,6 +17,7 @@ import Support from "@/pages/Support";
 import TrackOrder from "@/pages/TrackOrder";
 import { Route, Switch } from "wouter";
 import { BrowserNotificationManager } from "./components/BrowserNotifications";
+import { BookingCouponBar } from "./components/BookingCouponBar";
 import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -34,6 +36,7 @@ function Router() {
       <Route path="/driver/earnings" component={DriverEarnings} />
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin/drivers" component={AdminDrivers} />
+      <Route path="/admin/coupons" component={AdminCoupons} />
       <Route path="/admin/feedback" component={AdminFeedback} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/audit" component={AdminAuditLog} />
@@ -52,6 +55,7 @@ export default function App() {
           <Toaster richColors position="top-center" />
           <BrowserNotificationManager />
           <InstallAppPrompt />
+          <BookingCouponBar />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

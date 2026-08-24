@@ -56,6 +56,23 @@ export const servicePricingRules = mysqlTable("service_pricing_rules", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const coupons = mysqlTable("coupons", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 40 }).notNull().unique(),
+  discountType: mysqlEnum("discountType", ["fixed", "percent"]).notNull(),
+  discountValue: int("discountValue").notNull(),
+  minimumOrderFee: int("minimumOrderFee").notNull().default(0),
+  maximumDiscount: int("maximumDiscount"),
+  maxRedemptions: int("maxRedemptions"),
+  usedCount: int("usedCount").notNull().default(0),
+  status: mysqlEnum("status", ["active", "paused", "expired"]).notNull().default("active"),
+  startsAt: timestamp("startsAt"),
+  endsAt: timestamp("endsAt"),
+  createdByUserId: int("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const savedAddresses = mysqlTable("saved_addresses", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().references(() => users.id),
@@ -94,7 +111,10 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   healthNotes: text("healthNotes"),
   distanceMeters: int("distanceMeters").notNull().default(0),
   estimatedMinutes: int("estimatedMinutes").notNull().default(0),
+  fareBeforeDiscount: int("fareBeforeDiscount").notNull().default(0),
   estimatedFee: int("estimatedFee").notNull(),
+  couponCode: varchar("couponCode", { length: 40 }),
+  couponDiscount: int("couponDiscount").notNull().default(0),
   platformCommissionAmount: int("platformCommissionAmount").notNull().default(0),
   driverEarnings: int("driverEarnings").notNull().default(0),
   paymentMethod: mysqlEnum("paymentMethod", ["cash", "vodafone_cash"]).default("cash").notNull(),

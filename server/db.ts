@@ -1,12 +1,13 @@
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, deliveryComplaints, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
+import { chatMessages, coupons, deliveryComplaints, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
 import { buildDailyDeliveryReport } from "../shared/reporting";
 import { calculatePlatformCommission, defaultServicePricingRules, DeliveryServiceType, normalizeServicePricingRules, ServicePricingRules } from "../shared/delivery";
 import { calculateAvailableWithdrawalBalance } from "../shared/driver-finance";
+import { calculateCouponDiscount, normalizeCouponCode } from "../shared/coupons";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -16,6 +17,29 @@ export async function getDb() {
   }
   return _db;
 }
+
+export async function resolveCouponForOrder(code: string | undefined, fareBeforeDiscount: number) {
+  if (!code?.trim()) return { coupon: null, couponDiscount: 0, finalFee: fareBeforeDiscount };
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const normalizedCode = normalizeCouponCode(code);
+  const coupon = (await db.select().from(coupons).where(eq(coupons.code, normalizedCode)).limit(1))[0];
+  if (!coupon) throw new Error("كود الخصم غير صحيح.");
+  const calculation = calculateCouponDiscount(coupon, fareBeforeDiscount);
+  return { coupon, couponDiscount: calculation.couponDiscount, finalFee: calculation.finalFee };
+}
+
+export async function getAdminCoupons() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(coupons).orderBy(desc(coupons.createdAt)); }
+
+export async function createCoupon(input: { code: string; discountType: "fixed" | "percent"; discountValue: number; minimumOrderFee: number; maximumDiscount?: number | null; maxRedemptions?: number | null; startsAt?: Date | null; endsAt?: Date | null; createdByUserId: number }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const code = normalizeCouponCode(input.code); if (!/^[A-Z0-9_-]{3,40}$/.test(code)) throw new Error("استخدم رمزًا من حروف إنجليزية وأرقام وشرطة فقط.");
+  if (input.discountType === "percent" && (input.discountValue < 1 || input.discountValue > 100)) throw new Error("نسبة الخصم يجب أن تكون بين 1 و100.");
+  if (input.discountType === "fixed" && input.discountValue < 1) throw new Error("قيمة الخصم يجب أن تكون أكبر من صفر.");
+  await db.insert(coupons).values({ ...input, code, discountValue: Math.round(input.discountValue), minimumOrderFee: Math.max(0, Math.round(input.minimumOrderFee)), maximumDiscount: input.maximumDiscount ? Math.max(1, Math.round(input.maximumDiscount)) : null, maxRedemptions: input.maxRedemptions ? Math.max(1, Math.round(input.maxRedemptions)) : null, startsAt: input.startsAt || null, endsAt: input.endsAt || null, status: "active" });
+  return getAdminCoupons();
+}
+
+export async function updateCouponStatus(couponId: number, status: "active" | "paused" | "expired") { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(coupons).set({ status }).where(eq(coupons.id, couponId)); return getAdminCoupons(); }
 
 export async function getServicePricingRuleMap(): Promise<ServicePricingRules> {
   const db = await getDb();
@@ -75,11 +99,12 @@ async function dispatchOrderToNearestDrivers(db: Awaited<ReturnType<typeof getDb
   return nearest;
 }
 
-export async function createDeliveryOrder(order: InsertDeliveryOrder) {
+export async function createDeliveryOrder(order: InsertDeliveryOrder, couponId?: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا. حاول مرة أخرى بعد قليل.");
   await db.insert(deliveryOrders).values(order);
   const saved = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, order.reference)).limit(1))[0];
   if (!saved) throw new Error("تعذر حفظ الطلب.");
+  if (couponId) await db.update(coupons).set({ usedCount: sql`${coupons.usedCount} + 1` }).where(eq(coupons.id, couponId));
   await db.insert(orderEvents).values({ orderId: saved.id, eventType: "created", status: "new", note: "تم إنشاء الطلب وانتظار قبول مندوب قريب", actorUserId: order.userId });
   await db.insert(notifications).values({ userId: order.userId, orderId: saved.id, title: "تم إنشاء طلبك", body: `رقم الطلب ${saved.reference} قيد البحث عن مندوب قريب.` });
   await dispatchOrderToNearestDrivers(db, saved);
@@ -163,7 +188,7 @@ export async function updateDriverOrderStatus(orderId: number, driverId: number,
   validateDriverStatusUpdate({ assignedDriverId: target.driverId, actingDriverId: driverId, currentStatus: target.status, nextStatus: status });
   const dateField = { driver_arrived: { driverArrivedAt: new Date() }, picked_up: { pickedUpAt: new Date() }, in_delivery: { deliveryStartedAt: new Date() }, delivered: { deliveredAt: new Date() } }[status];
   const driver = status === "delivered" ? await getDriverById(driverId) : undefined;
-  const allocation = status === "delivered" && driver ? calculatePlatformCommission(target.estimatedFee, driver.commissionPercent) : undefined;
+  const allocation = status === "delivered" && driver ? calculatePlatformCommission(target.fareBeforeDiscount || target.estimatedFee, driver.commissionPercent) : undefined;
   await db.update(deliveryOrders).set({ status, ...dateField, ...(allocation ? { platformCommissionAmount: allocation.platformCommissionAmount, driverEarnings: allocation.driverEarnings } : {}) }).where(eq(deliveryOrders.id, orderId));
   if (status === "delivered") {
     if (driver && allocation) await db.update(drivers).set({ availability: "online", totalTrips: driver.totalTrips + 1, totalEarnings: driver.totalEarnings + allocation.driverEarnings }).where(eq(drivers.id, driverId));
@@ -185,7 +210,7 @@ export async function getAdminSummary() {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const [orders, driverRows] = await Promise.all([db.select().from(deliveryOrders), db.select().from(drivers)]);
   const deliveredOrders = orders.filter((order) => order.status === "delivered");
-  return { totalOrders: orders.length, activeOrders: orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length, deliveredOrders: deliveredOrders.length, cancelledOrders: orders.filter((order) => order.status === "cancelled").length, onlineDrivers: driverRows.filter((driver) => driver.availability === "online" || driver.availability === "busy").length, offlineDrivers: driverRows.filter((driver) => driver.availability === "offline").length, estimatedRevenue: deliveredOrders.reduce((sum, order) => sum + order.estimatedFee, 0), platformRevenue: deliveredOrders.reduce((sum, order) => sum + order.platformCommissionAmount, 0), driverNetEarnings: deliveredOrders.reduce((sum, order) => sum + order.driverEarnings, 0) };
+  return { totalOrders: orders.length, activeOrders: orders.filter((order) => !["delivered", "cancelled"].includes(order.status)).length, deliveredOrders: deliveredOrders.length, cancelledOrders: orders.filter((order) => order.status === "cancelled").length, onlineDrivers: driverRows.filter((driver) => driver.availability === "online" || driver.availability === "busy").length, offlineDrivers: driverRows.filter((driver) => driver.availability === "offline").length, estimatedRevenue: deliveredOrders.reduce((sum, order) => sum + order.estimatedFee, 0), platformRevenue: deliveredOrders.reduce((sum, order) => sum + order.platformCommissionAmount - order.couponDiscount, 0), driverNetEarnings: deliveredOrders.reduce((sum, order) => sum + order.driverEarnings, 0) };
 }
 
 export async function getAdminDrivers() { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(drivers).orderBy(desc(drivers.updatedAt)); }
