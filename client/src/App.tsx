@@ -15,6 +15,7 @@ import Support from "@/pages/Support";
 import TrackOrder from "@/pages/TrackOrder";
 import { Route, Switch } from "wouter";
 import { BrowserNotificationManager } from "./components/BrowserNotifications";
+import { InstallAppPrompt } from "./components/InstallAppPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -48,6 +49,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster richColors position="top-center" />
           <BrowserNotificationManager />
+          <InstallAppPrompt />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
