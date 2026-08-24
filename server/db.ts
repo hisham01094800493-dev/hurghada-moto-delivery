@@ -534,6 +534,28 @@ export async function getNotificationsForUser(userId: number) {
   return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
 }
 
+export async function markNotificationsRead(userId: number, notificationIds?: number[]) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  if (notificationIds?.length) await Promise.all(notificationIds.map((id) => db.update(notifications).set({ isRead: 1 }).where(and(eq(notifications.id, id), eq(notifications.userId, userId)))));
+  else await db.update(notifications).set({ isRead: 1 }).where(and(eq(notifications.userId, userId), eq(notifications.isRead, 0)));
+  return true;
+}
+
+export async function sendUnassignedOrderReminders() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const threshold = Date.now() - 5 * 60_000;
+  const orders = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.status, "new"))).filter((order) => !order.unassignedReminderSentAt && order.createdAt.getTime() <= threshold);
+  if (!orders.length) return { reminded: 0 };
+  const admins = await db.select().from(users).where(eq(users.role, "admin"));
+  for (const order of orders) {
+    await db.update(deliveryOrders).set({ unassignedReminderSentAt: new Date() }).where(eq(deliveryOrders.id, order.id));
+    const customerNotice = { userId: order.userId, orderId: order.id, title: "تحديث طلبك", body: "ما زلنا نبحث عن مندوب قريب لطلبك، وسنبلغك فور قبول أحد المندوبين." };
+    const adminNotices = admins.map((admin) => ({ userId: admin.id, orderId: order.id, title: "طلب يحتاج متابعة", body: `الطلب ${order.reference} لم يُعيّن له مندوب بعد خمس دقائق.` }));
+    await db.insert(notifications).values([customerNotice, ...adminNotices]);
+  }
+  return { reminded: orders.length };
+}
+
 export async function getDriverChatForCustomer(reference: string, customerUserId: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
   const order = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.reference, reference)).limit(1))[0];

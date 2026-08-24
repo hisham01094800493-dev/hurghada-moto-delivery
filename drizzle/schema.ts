@@ -111,6 +111,7 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   driverId: int("driverId").references(() => drivers.id),
   serviceType: mysqlEnum("serviceType", ["person", "parcel", "documents", "items", "other"]).notNull(),
   status: mysqlEnum("status", ["new", "assigned", "driver_arrived", "picked_up", "in_progress", "in_delivery", "delivered", "cancelled"]).default("new").notNull(),
+  unassignedReminderSentAt: timestamp("unassignedReminderSentAt"),
   customerName: varchar("customerName", { length: 120 }).notNull(),
   customerPhone: varchar("customerPhone", { length: 32 }).notNull(),
   pickupAddress: text("pickupAddress").notNull(),

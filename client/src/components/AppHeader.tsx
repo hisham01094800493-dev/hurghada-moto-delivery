@@ -3,7 +3,7 @@ import { BrowserNotificationToggle } from "@/components/BrowserNotifications";
 import { CustomerSideMenu } from "@/components/CustomerSideMenu";
 import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
-import { LogIn, PackageCheck, Route } from "lucide-react";
+import { Bell, LogIn, PackageCheck, Route } from "lucide-react";
 import { Link } from "wouter";
 
 export default function AppHeader() {
@@ -31,6 +31,7 @@ export default function AppHeader() {
             <>
               <span className="sm:hidden"><BrowserNotificationToggle compact /></span>
               <span className="hidden sm:block"><BrowserNotificationToggle /></span>
+              <Link href="/notifications" aria-label="مركز الإشعارات" className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-teal-200 hover:text-teal-700"><Bell className="h-4 w-4" /></Link>
               <Link href="/profile" className="hidden items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white no-underline sm:flex">
                 <PackageCheck className="h-4 w-4" />
                 <span>{user?.name?.split(" ")[0] || "طلباتي"}</span>

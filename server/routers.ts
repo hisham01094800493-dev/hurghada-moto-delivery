@@ -10,6 +10,7 @@ import { CANCELLATION_REASONS } from "../shared/cancellation";
 import { storagePut } from "./storage";
 import { MAX_AUDIO_BYTES, validateAudioUpload } from "@shared/chat-media";
 import { getSharedTracking, setTrackingShareForCustomer } from "./db";
+import { markNotificationsRead } from "./db";
 
 const availabilityInput = z.enum(["offline", "online", "busy", "suspended"]);
 const driverStatusInput = z.enum(["driver_arrived", "picked_up", "in_delivery", "delivered"]);
@@ -89,6 +90,7 @@ export const appRouter = router({
     send: protectedProcedure.input(z.object({ body: z.string().trim().min(1).max(1200), locationLabel: z.string().trim().max(240).optional(), locationLatitude: z.number().min(-90).max(90).optional(), locationLongitude: z.number().min(-180).max(180).optional() })).mutation(({ ctx, input }) => sendSupportMessage({ senderUserId: ctx.user.id, ...input })),
     sendAudio: protectedProcedure.input(z.object({ fileName: z.string().trim().regex(/^[A-Za-z0-9._-]{1,120}$/), mimeType: z.enum(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg"]), dataBase64: z.string().min(20).max(7000000), durationSeconds: z.number().int().min(1).max(600) })).mutation(async ({ ctx, input }) => { const bytes = Buffer.from(input.dataBase64, "base64"); if (!validateAudioUpload(bytes.byteLength, input.mimeType, input.durationSeconds)) throw new Error(`الرسالة الصوتية يجب أن تكون من نوع مدعوم وألا تتجاوز ${MAX_AUDIO_BYTES / 1_000_000} ميجابايت و10 دقائق.`); const uploaded = await storagePut(`chat-audio/${ctx.user.id}/${input.fileName}`, bytes, input.mimeType); return sendSupportAudio(ctx.user.id, uploaded.url, input.fileName, input.durationSeconds); }),
     notifications: protectedProcedure.query(({ ctx }) => getNotificationsForUser(ctx.user.id)),
+    markNotificationsRead: protectedProcedure.input(z.object({ notificationIds: z.array(z.number().int().positive()).max(100).optional() })).mutation(({ ctx, input }) => markNotificationsRead(ctx.user.id, input.notificationIds)),
     markRead: protectedProcedure.mutation(({ ctx }) => markSupportMessagesRead(ctx.user.id)),
     unreadCounts: protectedProcedure.query(({ ctx }) => getUnreadMessageCounts(ctx.user.id)),
   }),
