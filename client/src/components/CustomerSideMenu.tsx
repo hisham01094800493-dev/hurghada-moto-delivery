@@ -3,11 +3,11 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { adminNavigation, customerNavigation, driverNavigation, getRoleNavigation, isNavigationItemActive, type NavigationItem } from "@shared/customer-navigation";
-import { BarChart3, Bike, CircleHelp, ClipboardList, FileWarning, Home, LogIn, MapPin, Menu, PackageCheck, PackagePlus, Settings2, ShieldCheck, UserRound, WalletCards, X } from "lucide-react";
+import { BarChart3, Bike, CircleHelp, ClipboardList, FileWarning, Flag, Home, LogIn, MapPin, Menu, PackageCheck, PackagePlus, Settings2, ShieldCheck, UserRound, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 
-const icons = { home: Home, "new-order": PackagePlus, orders: ClipboardList, account: Settings2, support: CircleHelp, "driver-orders": Bike, "driver-earnings": WalletCards, "admin-dashboard": ShieldCheck, "admin-drivers": BarChart3, "admin-audit": FileWarning };
+const icons = { home: Home, "new-order": PackagePlus, orders: ClipboardList, account: Settings2, support: CircleHelp, "driver-orders": Bike, "driver-earnings": WalletCards, "admin-dashboard": ShieldCheck, "admin-drivers": BarChart3, "admin-feedback": Flag, "admin-audit": FileWarning };
 const statusLabels: Record<string, string> = { new: "جارٍ البحث عن سائق", assigned: "تم قبول السائق", driver_arrived: "السائق وصل", picked_up: "تم الاستلام", in_delivery: "جاري التوصيل" };
 
 function MenuLinks({ items, location, onNavigate, unreadTotal, driverInviteCount }: { items: readonly NavigationItem[]; location: string; onNavigate?: () => void; unreadTotal: number; driverInviteCount: number }) {

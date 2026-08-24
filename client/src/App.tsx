@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Booking from "@/pages/Booking";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminDrivers from "@/pages/AdminDrivers";
+import AdminFeedback from "@/pages/AdminFeedback";
 import AdminAuditLog from "@/pages/AdminAuditLog";
 import AdminSupport from "@/pages/AdminSupport";
 import DriverDashboard from "@/pages/DriverDashboard";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/driver/earnings" component={DriverEarnings} />
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin/drivers" component={AdminDrivers} />
+      <Route path="/admin/feedback" component={AdminFeedback} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/audit" component={AdminAuditLog} />
       <Route path="/admin/support" component={AdminSupport} />

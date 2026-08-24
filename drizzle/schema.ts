@@ -112,6 +112,31 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+export const orderReviews = mysqlTable("order_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().unique().references(() => deliveryOrders.id),
+  customerUserId: int("customerUserId").notNull().references(() => users.id),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  rating: int("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const deliveryComplaints = mysqlTable("delivery_complaints", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull().references(() => deliveryOrders.id),
+  customerUserId: int("customerUserId").notNull().references(() => users.id),
+  category: mysqlEnum("category", ["driver_behavior", "delay", "item_issue", "payment", "safety", "other"]).notNull(),
+  description: text("description").notNull(),
+  status: mysqlEnum("status", ["open", "in_review", "resolved", "closed"]).default("open").notNull(),
+  adminNote: text("adminNote"),
+  reviewedByUserId: int("reviewedByUserId").references(() => users.id),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const orderEvents = mysqlTable("order_events", {
   id: int("id").autoincrement().primaryKey(),
   orderId: int("orderId").notNull().references(() => deliveryOrders.id),

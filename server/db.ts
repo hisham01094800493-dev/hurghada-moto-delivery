@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { chatMessages, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
+import { chatMessages, deliveryComplaints, deliveryOrders, driverOrderInvitations, drivers, driverWithdrawalRequests, InsertDeliveryOrder, InsertUser, notifications, orderEvents, orderReviews, savedAddresses, servicePricingRules, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverStatusUpdate } from "./delivery";
 import { isCancellationReason } from "../shared/cancellation";
@@ -235,6 +235,54 @@ export async function reviewDriverWithdrawal(input: { withdrawalId: number; stat
   if (input.status === "paid" && withdrawal.status !== "approved") throw new Error("اعتمد الطلب أولًا قبل تسجيله كمدفوع.");
   await db.update(driverWithdrawalRequests).set({ status: input.status, adminNote: input.adminNote?.trim() || null, reviewedByUserId: input.adminUserId, reviewedAt: new Date(), ...(input.status === "paid" ? { paidAt: new Date() } : {}) }).where(eq(driverWithdrawalRequests.id, input.withdrawalId));
   return getAdminWithdrawalRequests();
+}
+
+async function getCustomerFeedbackOrder(reference: string, customerUserId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const order = (await db.select().from(deliveryOrders).where(and(eq(deliveryOrders.reference, reference), eq(deliveryOrders.userId, customerUserId))).limit(1))[0];
+  if (!order) throw new Error("لا يمكنك الوصول إلى ملاحظات هذا الطلب.");
+  return { db, order };
+}
+
+export async function getOrderFeedbackForCustomer(reference: string, customerUserId: number) {
+  const { db, order } = await getCustomerFeedbackOrder(reference, customerUserId);
+  const [review, complaints] = await Promise.all([
+    db.select().from(orderReviews).where(eq(orderReviews.orderId, order.id)).limit(1),
+    db.select().from(deliveryComplaints).where(and(eq(deliveryComplaints.orderId, order.id), eq(deliveryComplaints.customerUserId, customerUserId))).orderBy(desc(deliveryComplaints.createdAt)),
+  ]);
+  return { review: review[0] || null, complaints };
+}
+
+export async function submitOrderReview(input: { reference: string; customerUserId: number; rating: number; comment?: string }) {
+  const { db, order } = await getCustomerFeedbackOrder(input.reference, input.customerUserId);
+  if (order.status !== "delivered" || !order.driverId) throw new Error("يمكنك تقييم الطلب بعد تسليمه فقط.");
+  const existing = (await db.select().from(orderReviews).where(eq(orderReviews.orderId, order.id)).limit(1))[0];
+  if (existing) throw new Error("تم إرسال تقييم لهذا الطلب بالفعل.");
+  await db.insert(orderReviews).values({ orderId: order.id, customerUserId: input.customerUserId, driverId: order.driverId, rating: input.rating, comment: input.comment?.trim() || null });
+  await db.insert(notifications).values({ userId: (await getDriverById(order.driverId))?.userId || input.customerUserId, orderId: order.id, title: "تقييم جديد", body: "تم إرسال تقييم لرحلة مكتملة." });
+  return getOrderFeedbackForCustomer(input.reference, input.customerUserId);
+}
+
+export async function submitDeliveryComplaint(input: { reference: string; customerUserId: number; category: "driver_behavior" | "delay" | "item_issue" | "payment" | "safety" | "other"; description: string }) {
+  const { db, order } = await getCustomerFeedbackOrder(input.reference, input.customerUserId);
+  if (!["delivered", "cancelled"].includes(order.status)) throw new Error("يمكن إرسال شكوى تشغيلية بعد إغلاق الطلب فقط.");
+  await db.insert(deliveryComplaints).values({ orderId: order.id, customerUserId: input.customerUserId, category: input.category, description: input.description.trim(), status: "open" });
+  return getOrderFeedbackForCustomer(input.reference, input.customerUserId);
+}
+
+export async function getAdminFeedback() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [reviews, complaints, orders, driverRows] = await Promise.all([db.select().from(orderReviews).orderBy(desc(orderReviews.createdAt)), db.select().from(deliveryComplaints).orderBy(desc(deliveryComplaints.createdAt)), db.select().from(deliveryOrders), db.select().from(drivers)]);
+  return { reviews: reviews.map((review) => ({ ...review, order: orders.find((order) => order.id === review.orderId) || null, driver: driverRows.find((driver) => driver.id === review.driverId) || null })), complaints: complaints.map((complaint) => ({ ...complaint, order: orders.find((order) => order.id === complaint.orderId) || null })) };
+}
+
+export async function reviewDeliveryComplaint(input: { complaintId: number; status: "in_review" | "resolved" | "closed"; adminUserId: number; adminNote?: string }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const complaint = (await db.select().from(deliveryComplaints).where(eq(deliveryComplaints.id, input.complaintId)).limit(1))[0];
+  if (!complaint) throw new Error("الشكوى غير موجودة.");
+  await db.update(deliveryComplaints).set({ status: input.status, adminNote: input.adminNote?.trim() || null, reviewedByUserId: input.adminUserId, reviewedAt: new Date() }).where(eq(deliveryComplaints.id, input.complaintId));
+  await db.insert(notifications).values({ userId: complaint.customerUserId, orderId: complaint.orderId, title: "تحديث الشكوى", body: input.status === "resolved" ? "تمت معالجة شكواك." : input.status === "closed" ? "أُغلقت الشكوى بعد المراجعة." : "شكواك قيد المراجعة." });
+  return getAdminFeedback();
 }
 
 export async function getProfileWithAddresses(userId: number) {

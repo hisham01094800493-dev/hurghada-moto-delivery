@@ -16,6 +16,6 @@ describe("customer navigation", () => {
     expect(getRoleNavigation("user", false).driver).toEqual([]);
     expect(getRoleNavigation("driver", false).driver).toEqual([]);
     expect(getRoleNavigation("driver", true).driver.map((item) => item.path)).toEqual(["/driver", "/driver/earnings"]);
-    expect(getRoleNavigation("admin", false).admin.map((item) => item.path)).toEqual(["/admin", "/admin/drivers", "/admin/audit"]);
+    expect(getRoleNavigation("admin", false).admin.map((item) => item.path)).toEqual(["/admin", "/admin/drivers", "/admin/feedback", "/admin/audit"]);
   });
 });

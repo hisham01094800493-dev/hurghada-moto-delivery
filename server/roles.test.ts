@@ -56,5 +56,7 @@ describe("operational roles", () => {
     await expect(caller.admin.updatePricingRule({ serviceType: "person", baseFare: 30, perKmFare: 5, minimumFare: 35 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.updateDriverCommission({ driverId: 1, commissionPercent: 10 })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(caller.admin.reviewWithdrawal({ withdrawalId: 1, status: "approved" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.feedback()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.reviewComplaint({ complaintId: 1, status: "in_review" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

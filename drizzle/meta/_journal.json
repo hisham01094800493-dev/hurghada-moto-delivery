@@ -71,6 +71,13 @@
       "when": 1787585453112,
       "tag": "0009_regular_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787586480718,
+      "tag": "0010_odd_wraith",
+      "breakpoints": true
     }
   ]
 }
