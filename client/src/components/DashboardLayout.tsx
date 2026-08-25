@@ -23,12 +23,12 @@ import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users, type LucideIcon } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-export type DashboardNavigationItem = { icon: LucideIcon; label: string; path: string };
+export type DashboardNavigationItem = { icon: LucideIcon; label: string; path: string; section?: string };
 
 const defaultMenuItems: DashboardNavigationItem[] = [
   { icon: LayoutDashboard, label: "لوحة التحكم", path: "/" },
@@ -135,8 +135,8 @@ function DashboardLayoutContent({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
 
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
-      const newWidth = e.clientX - sidebarLeft;
+      const sidebarRight = sidebarRef.current?.getBoundingClientRect().right ?? window.innerWidth;
+      const newWidth = sidebarRight - e.clientX;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth);
       }
@@ -164,8 +164,9 @@ function DashboardLayoutContent({
   return (
     <>
       <div className="relative" ref={sidebarRef}>
-        <Sidebar
-          collapsible="icon"
+          <Sidebar
+            side="right"
+            collapsible="icon"
           className="border-r-0"
           disableTransition={isResizing}
         >
@@ -190,10 +191,12 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {menuItems.map((item, index) => {
                 const isActive = location === item.path;
                 return (
-                  <SidebarMenuItem key={item.path}>
+                  <Fragment key={item.path}>
+                    {item.section && (index === 0 || menuItems[index - 1]?.section !== item.section) && <li className="mb-1 mt-4 px-3 text-[10px] font-black tracking-wide text-muted-foreground first:mt-1">{item.section}</li>}
+                    <SidebarMenuItem>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
@@ -205,7 +208,8 @@ function DashboardLayoutContent({
                       />
                       <span className="flex min-w-0 flex-1 items-center justify-between gap-2"><span>{item.label}</span>{item.label.includes("الدعم") && Boolean(unreadCounts.data?.support) && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-700">{unreadCounts.data?.support}</span>}</span>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
+                    </SidebarMenuItem>
+                  </Fragment>
                 );
               })}
             </SidebarMenu>
@@ -243,7 +247,7 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);

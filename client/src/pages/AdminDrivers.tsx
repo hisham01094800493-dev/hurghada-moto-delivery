@@ -1,11 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { adminMenu } from "@/components/AdminNavigation";
 import { trpc } from "@/lib/trpc";
 import { BadgeDollarSign, Bike, CircleDollarSign, ClipboardList, KeyRound, Landmark, Plus, Settings2, ShieldAlert, UsersRound, WalletCards } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const adminMenu = [{ icon: ClipboardList, label: "نظرة عامة", path: "/admin" }, { icon: Bike, label: "إدارة المندوبين", path: "/admin/drivers" }, { icon: Settings2, label: "التسعير والعمولات", path: "/admin/drivers#pricing" }];
 const serviceLabels: Record<string, string> = { person: "توصيل أفراد", parcel: "طلبات وطرود", documents: "مستندات", items: "مشتريات ومنتجات", other: "طلبات أخرى" };
 const withdrawalLabels: Record<string, string> = { pending: "قيد المراجعة", approved: "معتمد", rejected: "مرفوض", paid: "تم الصرف" };
 
