@@ -700,7 +700,7 @@ export async function createDriverWalletTopupInvoice(userId: number, amount: num
   const response = await fetch(process.env.FAWRY_API_URL || "https://atfawry.fawrystaging.com/ECommerceWeb/Fawry/payments/charge", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ merchantCode, merchantRefNum, customerProfileId: driver.userId, paymentMethod, customerName: driver.displayName, customerMobile: driver.phone, customerEmail: account?.email || "no-reply@example.com", amount: formattedAmount, currencyCode: "EGP", language: "ar-eg", description: `شحن محفظة السائق ${driver.displayName}`, chargeItems: [{ itemId: `wallet-${driver.id}`, description: "شحن محفظة تشغيلية", price: formattedAmount, quantity: 1 }], signature }) });
   if (!response.ok) throw new Error("تعذر إنشاء فاتورة فوري حاليًا.");
   const result = await response.json() as { referenceNumber?: string; fawryRefNumber?: string; referenceNo?: string; type?: string };
-  const fawryRefNo = result.referenceNumber || result.fawryRefNumber || result.referenceNo; if (!fawryRefNo) throw new Error("لم يُرجع فوري كود دفع صالحًا.");
+  const fawryRefNo = result.referenceNumber || result.fawryRefNumber || result.referenceNo; if (!fawryRefNo || !/^9\d{9}$/.test(String(fawryRefNo))) throw new Error("لم يُرجع فوري رقم مرجع صالحًا من 10 أرقام يبدأ بالرقم 9.");
   await db.insert(driverWalletTopups).values({ driverId: driver.id, merchantRefNum, fawryRefNo, amount, status: "pending", expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
   return { merchantRefNum, fawryRefNo, amount, status: "pending" as const, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) };
 }
