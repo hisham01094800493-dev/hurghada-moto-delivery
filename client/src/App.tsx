@@ -52,6 +52,7 @@ function Router() {
       <Route path="/driver/earnings" component={DriverEarnings} />
       <Route path="/driver/verification" component={DriverVerification} />
       <Route path="/driver" component={DriverDashboard} />
+      <Route path="/admin/drivers" component={AdminDrivers} />
       <Route path="/admin/settings/zones" component={AdminZones} />
       <Route path="/admin/settings/route-prices" component={AdminRoutePrices} />
       <Route path="/admin/zones" component={AdminZones} />

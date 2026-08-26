@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateDistanceMeters, calculateOperationalQuote, calculatePlatformCommission, normalizeServicePricingRules } from "@shared/delivery";
+import { calculateDistanceMeters, calculateOperationalQuote, calculatePlatformCommission, normalizeDriverCommissionPercent, normalizeServicePricingRules } from "@shared/delivery";
 import { allowedStatusTransitions, assertOperationalStatusTransition, buildOperationalQuote, deliveryOrderInput, validateDriverStatusUpdate } from "./delivery";
 
 const baseOrder = { serviceType: "person" as const, customerName: "أحمد علي", customerPhone: "01012345678", pickupAddress: "ميدان السقالة، الغردقة", pickupLatitude: 27.2579, pickupLongitude: 33.8116, destinationAddress: "الممشى السياحي، الغردقة", destinationLatitude: 27.24, destinationLongitude: 33.84, requestedFor: "2026-08-23T14:00", contactless: true };
@@ -10,6 +10,12 @@ describe("operational pricing", () => {
   it("does not allow a per-kilometer rule below 5 جنيهات", () => expect(normalizeServicePricingRules({ person: { baseFare: 0, perKmFare: 2, minimumFare: 0 } }).person.perKmFare).toBe(5));
   it("prices a parcel above a person trip for the same distance by default", () => { const person = calculateOperationalQuote({ serviceType: "person", distanceMeters: 2000, requestedFor: "2026-08-23T14:00" }); const parcel = calculateOperationalQuote({ serviceType: "parcel", distanceMeters: 2000, requestedFor: "2026-08-23T14:00" }); expect(parcel.estimatedFee).toBeGreaterThan(person.estimatedFee); });
   it("splits completed order value into platform commission and driver net", () => expect(calculatePlatformCommission(120, 10)).toEqual({ grossFee: 120, commissionPercent: 10, platformCommissionAmount: 12, driverEarnings: 108 }));
+  it("normalizes the driver commission selected by administration", () => {
+    expect(normalizeDriverCommissionPercent(17.6)).toBe(18);
+    expect(normalizeDriverCommissionPercent(-5)).toBe(0);
+    expect(normalizeDriverCommissionPercent(95)).toBe(80);
+    expect(calculatePlatformCommission(250, 17.6)).toEqual({ grossFee: 250, commissionPercent: 18, platformCommissionAmount: 45, driverEarnings: 205 });
+  });
   it("creates an operational quote from a valid request", () => expect(buildOperationalQuote(baseOrder).estimatedMinutes).toBeGreaterThanOrEqual(8));
   it("includes each additional stop in the quoted route distance", () => {
     const direct = buildOperationalQuote(baseOrder);

@@ -44,9 +44,13 @@ export function calculateOperationalQuote({ serviceType, distanceMeters, request
   return { distanceMeters: Math.round(distanceMeters), estimatedMinutes, estimatedFee };
 }
 
+export function normalizeDriverCommissionPercent(commissionPercent: number) {
+  return Math.min(80, Math.max(0, Math.round(commissionPercent)));
+}
+
 export function calculatePlatformCommission(grossFee: number, commissionPercent: number) {
   const normalizedGross = Math.max(0, Math.round(grossFee));
-  const normalizedPercent = Math.min(80, Math.max(0, Math.round(commissionPercent)));
+  const normalizedPercent = normalizeDriverCommissionPercent(commissionPercent);
   const platformCommissionAmount = Math.round((normalizedGross * normalizedPercent) / 100);
   return { grossFee: normalizedGross, commissionPercent: normalizedPercent, platformCommissionAmount, driverEarnings: normalizedGross - platformCommissionAmount };
 }

@@ -26,6 +26,8 @@ export const drivers = mysqlTable("drivers", {
   lastLocationAt: timestamp("lastLocationAt"),
   totalTrips: int("totalTrips").notNull().default(0),
   totalEarnings: int("totalEarnings").notNull().default(0),
+  walletBalance: int("walletBalance").notNull().default(0),
+  walletCreditLimit: int("walletCreditLimit").notNull().default(100),
   commissionPercent: int("commissionPercent").notNull().default(10),
   canAcceptOrders: int("canAcceptOrders").notNull().default(1),
   canUpdateOrderStatus: int("canUpdateOrderStatus").notNull().default(1),
@@ -172,6 +174,32 @@ export const deliveryOrders = mysqlTable("delivery_orders", {
   cancellationReason: text("cancellationReason"),
   adminArchivedAt: timestamp("adminArchivedAt"),
   adminArchivedByUserId: int("adminArchivedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const driverWalletTransactions = mysqlTable("driver_wallet_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  orderId: int("orderId").references(() => deliveryOrders.id),
+  topupId: int("topupId"),
+  type: mysqlEnum("type", ["trip_commission", "wallet_topup", "admin_adjustment"]).notNull(),
+  amount: int("amount").notNull(),
+  balanceAfter: int("balanceAfter").notNull(),
+  description: varchar("description", { length: 255 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const driverWalletTopups = mysqlTable("driver_wallet_topups", {
+  id: int("id").autoincrement().primaryKey(),
+  driverId: int("driverId").notNull().references(() => drivers.id),
+  merchantRefNum: varchar("merchantRefNum", { length: 64 }).notNull().unique(),
+  fawryRefNo: varchar("fawryRefNo", { length: 64 }).unique(),
+  amount: int("amount").notNull(),
+  status: mysqlEnum("status", ["pending", "paid", "expired", "cancelled", "failed"]).default("pending").notNull(),
+  paymentMethod: varchar("paymentMethod", { length: 32 }).notNull().default("PayAtFawry"),
+  expiresAt: timestamp("expiresAt"),
+  paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
