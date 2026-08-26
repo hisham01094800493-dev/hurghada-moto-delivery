@@ -20,8 +20,61 @@
   --color-border: #e2eaee;
   --color-input: #e2eaee;
   --color-ring: #0d9488;
+  --color-sidebar: #ffffff;
+  --color-sidebar-foreground: #0f172a;
+  --color-sidebar-border: #e2eaee;
+  --color-sidebar-accent: #e9faf7;
+  --color-sidebar-accent-foreground: #082538;
+  --color-sidebar-ring: #0d9488;
   --radius: 0.9rem;
 }
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  color-scheme: dark;
+  --color-background: #071a28;
+  --color-foreground: #e6f2f6;
+  --color-card: #102c3a;
+  --color-card-foreground: #e6f2f6;
+  --color-popover: #102c3a;
+  --color-popover-foreground: #e6f2f6;
+  --color-primary: #7de3d2;
+  --color-primary-foreground: #082538;
+  --color-secondary: #163c48;
+  --color-secondary-foreground: #d8f8f2;
+  --color-muted: #17313e;
+  --color-muted-foreground: #a8bdc8;
+  --color-accent: #1a4650;
+  --color-accent-foreground: #e6f2f6;
+  --color-border: #284653;
+  --color-input: #284653;
+  --color-ring: #5ed5c2;
+  --color-sidebar: #0b2231;
+  --color-sidebar-foreground: #e6f2f6;
+  --color-sidebar-border: #284653;
+  --color-sidebar-accent: #163c48;
+  --color-sidebar-accent-foreground: #e6f2f6;
+  --color-sidebar-ring: #5ed5c2;
+}
+
+.dark body {
+  background: #071a28;
+}
+
+.dark .admin-theme [class*="bg-white"] { background-color: #102c3a; }
+.dark .admin-theme [class*="bg-slate-50"] { background-color: #122735; }
+.dark .admin-theme [class*="bg-slate-100"] { background-color: #1b3543; }
+.dark .admin-theme [class*="text-[#082538]"] { color: #e6f2f6; }
+.dark .admin-theme [class*="text-slate-600"] { color: #b2c5ce; }
+.dark .admin-theme [class*="text-slate-500"] { color: #98afba; }
+.dark .admin-theme [class*="text-slate-400"] { color: #7e9aa7; }
+.dark .admin-theme [class*="border-slate-"] { border-color: #284653; }
+.dark .admin-theme input,
+.dark .admin-theme select,
+.dark .admin-theme textarea { background-color: #102c3a; color: #e6f2f6; border-color: #355563; }
+.dark .admin-theme input::placeholder,
+.dark .admin-theme textarea::placeholder { color: #7e9aa7; }
 
 @layer base {
   * { @apply border-border; }

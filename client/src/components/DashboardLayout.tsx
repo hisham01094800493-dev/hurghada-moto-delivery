@@ -22,7 +22,8 @@ import {
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, LogOut, Moon, PanelLeft, Sun, Users, type LucideIcon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -54,6 +55,7 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const isAdminLayout = menuItems.some(item => item.path.startsWith("/admin"));
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -89,13 +91,14 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider
+      className={isAdminLayout ? "admin-theme" : undefined}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth} menuItems={menuItems} title={title}>
+      <DashboardLayoutContent setSidebarWidth={setSidebarWidth} menuItems={menuItems} title={title} isAdminLayout={isAdminLayout}>
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -107,6 +110,7 @@ type DashboardLayoutContentProps = {
   setSidebarWidth: (width: number) => void;
   menuItems: DashboardNavigationItem[];
   title: string;
+  isAdminLayout: boolean;
 };
 
 function DashboardLayoutContent({
@@ -114,8 +118,10 @@ function DashboardLayoutContent({
   setSidebarWidth,
   menuItems,
   title,
+  isAdminLayout,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme, switchable } = useTheme();
   const unreadCounts = trpc.support.unreadCounts.useQuery(undefined, { enabled: Boolean(user), refetchInterval: 10000 });
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
@@ -130,6 +136,19 @@ function DashboardLayoutContent({
       setIsResizing(false);
     }
   }, [isCollapsed]);
+
+  const themeToggle = isAdminLayout && switchable && toggleTheme ? (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label={theme === "dark" ? "التبديل إلى الوضع النهاري" : "التبديل إلى الوضع الليلي"}
+      title={theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      <span className="sr-only">{theme === "dark" ? "الوضع النهاري" : "الوضع الليلي"}</span>
+    </button>
+  ) : null;
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -180,12 +199,13 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate font-semibold tracking-tight">
                     {title}
                   </span>
+                  {themeToggle}
                 </div>
-              ) : null}
+              ) : themeToggle}
             </div>
           </SidebarHeader>
 
@@ -259,7 +279,7 @@ function DashboardLayoutContent({
       <SidebarInset>
         {isMobile && (
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-1">
@@ -269,6 +289,7 @@ function DashboardLayoutContent({
                 </div>
               </div>
             </div>
+            {themeToggle}
           </div>
         )}
         <main className="flex-1 p-4">{children}</main>
