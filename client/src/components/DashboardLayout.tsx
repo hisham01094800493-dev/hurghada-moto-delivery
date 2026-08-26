@@ -23,7 +23,7 @@ import {
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, Moon, PanelLeft, Search, Sun, Users, type LucideIcon } from "lucide-react";
+import { Bell, CheckCheck, Clock3, LayoutDashboard, LogOut, Moon, PanelLeft, Search, Sun, Users, type LucideIcon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -123,6 +123,9 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme, switchable } = useTheme();
+  const notifications = trpc.support.notifications.useQuery(undefined, { enabled: isAdminLayout && Boolean(user), refetchInterval: 10000 });
+  const markNotificationsRead = trpc.support.markNotificationsRead.useMutation({ onSuccess: () => notifications.refetch() });
+  const unreadNotificationCount = notifications.data?.filter((item) => !item.isRead).length ?? 0;
   const unreadCounts = trpc.support.unreadCounts.useQuery(undefined, { enabled: Boolean(user), refetchInterval: 10000 });
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -329,6 +332,31 @@ function DashboardLayoutContent({
                 className="h-10 w-full rounded-xl border border-input bg-background px-10 text-sm font-bold text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-4 focus:ring-ring/15"
               />
               <kbd className="hidden shrink-0 rounded-lg border border-border bg-muted px-2 py-1 text-[10px] font-black text-muted-foreground sm:inline-flex">Ctrl K</kbd>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="فتح الإشعارات"
+                    className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {unreadNotificationCount > 0 && <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white ring-2 ring-background">{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</span>}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-2">
+                  <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+                    <div>
+                      <p className="text-sm font-black text-popover-foreground">آخر التنبيهات</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">تحديثات التشغيل والمدفوعات والطلبات</p>
+                    </div>
+                    <button type="button" disabled={!unreadNotificationCount || markNotificationsRead.isPending} onClick={() => markNotificationsRead.mutate({})} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-extrabold text-primary transition hover:bg-accent disabled:opacity-40"><CheckCheck className="h-3.5 w-3.5" />تعليم الكل</button>
+                  </div>
+                  <div className="mt-2 max-h-80 space-y-1 overflow-y-auto">
+                    {notifications.data?.length ? notifications.data.slice(0, 6).map((item) => <button type="button" key={item.id} onClick={() => { if (!item.isRead) markNotificationsRead.mutate({ notificationIds: [item.id] }); setLocation("/admin/operations"); }} className={`flex w-full items-start gap-2.5 rounded-xl p-3 text-right transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${item.isRead ? "" : "bg-accent/60"}`}><span className={`mt-0.5 rounded-lg p-1.5 ${item.isRead ? "bg-muted text-muted-foreground" : "bg-primary/15 text-primary"}`}><Bell className="h-3.5 w-3.5" /></span><span className="min-w-0 flex-1"><span className="flex items-start justify-between gap-2"><span className="text-xs font-black text-popover-foreground">{item.title}</span>{!item.isRead && <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />}</span><span className="mt-1 block line-clamp-2 text-[11px] font-medium leading-5 text-muted-foreground">{item.body}</span><span className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-muted-foreground"><Clock3 className="h-3 w-3" />{new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</span></span></button>) : <div className="px-3 py-8 text-center"><Bell className="mx-auto h-6 w-6 text-muted-foreground" /><p className="mt-2 text-xs font-bold text-muted-foreground">لا توجد تنبيهات جديدة.</p></div>}
+                  </div>
+                  <DropdownMenuItem onClick={() => setLocation("/notifications")} className="mt-1 justify-center rounded-xl text-xs font-extrabold text-primary">فتح مركز الإشعارات الكامل</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {searchQuery.trim() && (
                 <div className="absolute inset-x-0 top-12 z-50 overflow-hidden rounded-2xl border border-border bg-popover p-1.5 shadow-xl">
                   {searchableItems.length ? searchableItems.slice(0, 8).map((item) => (
