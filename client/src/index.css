@@ -62,10 +62,29 @@
   background: #071a28;
 }
 
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-duration: 280ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition-duration: 1ms;
+  }
+}
+
 .dark .admin-theme [class*="bg-white"] { background-color: #102c3a; }
 .dark .admin-theme [class*="bg-slate-50"] { background-color: #122735; }
 .dark .admin-theme [class*="bg-slate-100"] { background-color: #1b3543; }
 .dark .admin-theme [class*="text-[#082538]"] { color: #e6f2f6; }
+.dark .admin-theme [class*="text-slate-700"],
 .dark .admin-theme [class*="text-slate-600"] { color: #b2c5ce; }
 .dark .admin-theme [class*="text-slate-500"] { color: #98afba; }
 .dark .admin-theme [class*="text-slate-400"] { color: #7e9aa7; }

@@ -18,6 +18,12 @@ export const adminMenu: DashboardNavigationItem[] = [
   { icon: Settings2, label: "إعدادات الإدارة", path: "/admin/settings", section: "الجودة والدعم" },
 ];
 
+export function filterAdminNavigation(items: DashboardNavigationItem[], query: string) {
+  const normalizedQuery = query.trim().toLocaleLowerCase("ar-EG");
+  if (!normalizedQuery) return items;
+  return items.filter((item) => `${item.label} ${item.path}`.toLocaleLowerCase("ar-EG").includes(normalizedQuery));
+}
+
 export const adminQuickLinks = [
   { icon: Truck, label: "مركز العمليات", path: "/admin/operations", tone: "bg-amber-50 text-amber-950" },
   { icon: Bike, label: "السائقون", path: "/admin/drivers", tone: "bg-teal-50 text-teal-950" },

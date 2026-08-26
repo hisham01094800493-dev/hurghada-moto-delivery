@@ -6,6 +6,11 @@ export function getNextTheme(theme: Theme): Theme {
   return theme === "light" ? "dark" : "light";
 }
 
+export function resolveInitialTheme(storedTheme: string | null, systemPrefersDark: boolean, defaultTheme: Theme = "light"): Theme {
+  if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
+  return systemPrefersDark ? "dark" : defaultTheme;
+}
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme?: () => void;
@@ -25,29 +30,30 @@ export function ThemeProvider({
   defaultTheme = "light",
   switchable = false,
 }: ThemeProviderProps) {
+  const [hasUserChoice, setHasUserChoice] = useState(() => {
+    if (!switchable || typeof window === "undefined") return false;
+    const stored = window.localStorage.getItem("theme");
+    return stored === "light" || stored === "dark";
+  });
   const [theme, setTheme] = useState<Theme>(() => {
-    if (switchable) {
-      const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
-    }
-    return defaultTheme;
+    if (!switchable || typeof window === "undefined") return defaultTheme;
+    const stored = window.localStorage.getItem("theme");
+    return resolveInitialTheme(stored, Boolean(window.matchMedia?.("(prefers-color-scheme: dark)")?.matches), defaultTheme);
   });
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    root.classList.toggle("dark", theme === "dark");
+    if (switchable && hasUserChoice) {
+      window.localStorage.setItem("theme", theme);
     }
-
-    if (switchable) {
-      localStorage.setItem("theme", theme);
-    }
-  }, [theme, switchable]);
+  }, [theme, switchable, hasUserChoice]);
 
   const toggleTheme = switchable
     ? () => {
+        document.documentElement.classList.add("theme-transition");
+        window.setTimeout(() => document.documentElement.classList.remove("theme-transition"), 320);
+        setHasUserChoice(true);
         setTheme(getNextTheme);
       }
     : undefined;

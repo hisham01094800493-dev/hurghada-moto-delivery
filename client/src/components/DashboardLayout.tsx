@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { adminMenu, filterAdminNavigation } from "@/components/AdminNavigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +23,7 @@ import {
 import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, Moon, PanelLeft, Sun, Users, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, LogOut, Moon, PanelLeft, Search, Sun, Users, type LucideIcon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -124,6 +125,8 @@ function DashboardLayoutContent({
   const { theme, toggleTheme, switchable } = useTheme();
   const unreadCounts = trpc.support.unreadCounts.useQuery(undefined, { enabled: Boolean(user), refetchInterval: 10000 });
   const [location, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
@@ -136,6 +139,20 @@ function DashboardLayoutContent({
       setIsResizing(false);
     }
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (!isAdminLayout) return;
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [isAdminLayout]);
+
+  const searchableItems = filterAdminNavigation(isAdminLayout ? adminMenu : menuItems, searchQuery);
 
   const themeToggle = isAdminLayout && switchable && toggleTheme ? (
     <button
@@ -290,6 +307,45 @@ function DashboardLayoutContent({
               </div>
             </div>
             {themeToggle}
+          </div>
+        )}
+        {isAdminLayout && (
+          <div className="admin-search-shell sticky top-14 z-30 border-b md:top-0 border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+            <div className="relative mx-auto flex max-w-7xl items-center gap-2">
+              <Search className="pointer-events-none absolute right-3 h-4 w-4 text-muted-foreground" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setSearchQuery("");
+                  if (event.key === "Enter" && searchableItems[0]) {
+                    setLocation(searchableItems[0].path);
+                    setSearchQuery("");
+                  }
+                }}
+                placeholder="ابحث داخل لوحة الإدارة…"
+                aria-label="البحث داخل لوحة الإدارة"
+                className="h-10 w-full rounded-xl border border-input bg-background px-10 text-sm font-bold text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-4 focus:ring-ring/15"
+              />
+              <kbd className="hidden shrink-0 rounded-lg border border-border bg-muted px-2 py-1 text-[10px] font-black text-muted-foreground sm:inline-flex">Ctrl K</kbd>
+              {searchQuery.trim() && (
+                <div className="absolute inset-x-0 top-12 z-50 overflow-hidden rounded-2xl border border-border bg-popover p-1.5 shadow-xl">
+                  {searchableItems.length ? searchableItems.slice(0, 8).map((item) => (
+                    <button
+                      type="button"
+                      key={item.path}
+                      onClick={() => { setLocation(item.path); setSearchQuery(""); }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right text-sm font-bold text-popover-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <item.icon className="h-4 w-4 shrink-0 text-primary" />
+                      <span>{item.label}</span>
+                      <span className="mr-auto text-[10px] font-medium text-muted-foreground">{item.section}</span>
+                    </button>
+                  )) : <p className="px-3 py-3 text-center text-xs font-bold text-muted-foreground">لا توجد نتائج مطابقة.</p>}
+                </div>
+              )}
+            </div>
           </div>
         )}
         <main className="flex-1 p-4">{children}</main>
