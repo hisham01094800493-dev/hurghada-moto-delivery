@@ -9,6 +9,7 @@ import AdminRoutePrices from "@/pages/AdminRoutePrices";
 import AdminCoupons from "@/pages/AdminCoupons";
 import AdminDrivers from "@/pages/AdminDrivers";
 import AdminWallets from "@/pages/AdminWallets";
+import AdminWalletTopups from "@/pages/AdminWalletTopups";
 import AdminDriverVerifications from "@/pages/AdminDriverVerifications";
 import AdminFeedback from "@/pages/AdminFeedback";
 import AdminAuditLog from "@/pages/AdminAuditLog";
@@ -55,6 +56,7 @@ function Router() {
       <Route path="/driver" component={DriverDashboard} />
       <Route path="/admin/drivers" component={AdminDrivers} />
       <Route path="/admin/wallets" component={AdminWallets} />
+      <Route path="/admin/wallet-topups" component={AdminWalletTopups} />
       <Route path="/admin/settings/zones" component={AdminZones} />
       <Route path="/admin/settings/route-prices" component={AdminRoutePrices} />
       <Route path="/admin/zones" component={AdminZones} />

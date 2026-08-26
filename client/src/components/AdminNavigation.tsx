@@ -1,4 +1,4 @@
-import { BarChart3, BadgeCheck, Bike, ClipboardList, FileCheck2, FolderKanban, Headphones, MapPinned, MessageSquareWarning, Percent, Settings2, ShieldCheck, Tags, Truck, UsersRound, WalletCards } from "lucide-react";
+import { BarChart3, BadgeCheck, Bike, ClipboardList, FileCheck2, FolderKanban, Headphones, MapPinned, MessageSquareWarning, Percent, ReceiptText, Settings2, ShieldCheck, Tags, Truck, UsersRound, WalletCards } from "lucide-react";
 import type { DashboardNavigationItem } from "./DashboardLayout";
 
 export const adminMenu: DashboardNavigationItem[] = [
@@ -8,6 +8,7 @@ export const adminMenu: DashboardNavigationItem[] = [
   { icon: Bike, label: "السائقون والتسعير", path: "/admin/drivers", section: "التشغيل والموارد" },
   { icon: FileCheck2, label: "اعتماد السائقين", path: "/admin/verifications", section: "التشغيل والموارد" },
   { icon: WalletCards, label: "محافظ السائقين", path: "/admin/wallets", section: "المالية" },
+  { icon: ReceiptText, label: "فواتير شحن المحافظ", path: "/admin/wallet-topups", section: "المالية" },
   { icon: WalletCards, label: "السحوبات", path: "/admin/drivers#withdrawals", section: "المالية" },
   { icon: BadgeCheck, label: "المدفوعات", path: "/admin/operations#payments", section: "المالية" },
   { icon: MapPinned, label: "المناطق والرسوم", path: "/admin/settings/zones", section: "الإعدادات" },

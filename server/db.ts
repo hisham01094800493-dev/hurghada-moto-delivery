@@ -747,3 +747,22 @@ export async function handleFawryWalletCallback(input: { fawryRefNo: string; mer
   const driver = await getDriverById(topup.driverId); if (driver) await db.insert(driverWalletTransactions).values({ driverId: driver.id, topupId: topup.id, type: "wallet_topup", amount: topup.amount, balanceAfter: driver.walletBalance, description: `شحن محفظة عبر فوري بكود ${topup.fawryRefNo}` });
   return { accepted: true, credited: true, status: "paid" } as const;
 }
+
+export async function getAdminWalletTopups() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const [topups, driverRows] = await Promise.all([db.select().from(driverWalletTopups).orderBy(desc(driverWalletTopups.createdAt)), db.select().from(drivers)]);
+  const driverMap = new Map(driverRows.map((driver) => [driver.id, driver]));
+  return topups.map((topup) => ({ topup, driver: driverMap.get(topup.driverId) || null }));
+}
+
+export async function simulateWalletTopupPayment(topupId: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  if (process.env.NODE_ENV === "production" && process.env.FAWRY_ENVIRONMENT !== "test") throw new Error("محاكاة الدفع متاحة في بيئة الاختبار فقط.");
+  const [topup] = await db.select().from(driverWalletTopups).where(eq(driverWalletTopups.id, topupId)).limit(1);
+  if (!topup || topup.status !== "pending") throw new Error("الفاتورة غير موجودة أو ليست قيد الانتظار.");
+  const changed = await db.update(driverWalletTopups).set({ status: "paid", paidAt: new Date() }).where(and(eq(driverWalletTopups.id, topup.id), eq(driverWalletTopups.status, "pending"))) as any;
+  if (!changed[0]?.affectedRows) throw new Error("تم تحديث الفاتورة من قبل.");
+  await db.update(drivers).set({ walletBalance: sql`${drivers.walletBalance} + ${topup.amount}` }).where(eq(drivers.id, topup.driverId));
+  const driver = await getDriverById(topup.driverId); if (driver) await db.insert(driverWalletTransactions).values({ driverId: driver.id, topupId: topup.id, type: "wallet_topup", amount: topup.amount, balanceAfter: driver.walletBalance, description: `محاكاة شحن اختبارية عبر فوري ${topup.fawryRefNo || topup.merchantRefNum}` });
+  return getAdminWalletTopups();
+}
