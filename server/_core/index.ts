@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { sdk } from "./sdk";
-import { sendUnassignedOrderReminders } from "../db";
+import { handleFawryWalletCallback, sendUnassignedOrderReminders } from "../db";
 import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -36,6 +36,16 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.get("/api/payments/fawry/callback", async (req, res) => {
+    try {
+      const query = req.query as Record<string, string | undefined>;
+      const result = await handleFawryWalletCallback({ fawryRefNo: query.FawryRefNo || "", merchantRefNum: query.MerchnatRefNo || query.MerchantRefNo || "", orderStatus: query.OrderStatus || "", amount: query.Amount || "", messageSignature: query.MessageSignature || query["Message Signature"] || "" });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("[Fawry] wallet callback rejected", error);
+      return res.status(400).json({ accepted: false });
+    }
+  });
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.post("/api/scheduled/order-reminders", async (req, res) => {

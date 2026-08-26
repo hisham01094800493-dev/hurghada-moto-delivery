@@ -7,6 +7,7 @@ export const adminMenu: DashboardNavigationItem[] = [
   { icon: BarChart3, label: "التقرير اليومي", path: "/admin#daily-report", section: "المتابعة اليومية" },
   { icon: Bike, label: "السائقون والتسعير", path: "/admin/drivers", section: "التشغيل والموارد" },
   { icon: FileCheck2, label: "اعتماد السائقين", path: "/admin/verifications", section: "التشغيل والموارد" },
+  { icon: WalletCards, label: "محافظ السائقين", path: "/admin/wallets", section: "المالية" },
   { icon: WalletCards, label: "السحوبات", path: "/admin/drivers#withdrawals", section: "المالية" },
   { icon: BadgeCheck, label: "المدفوعات", path: "/admin/operations#payments", section: "المالية" },
   { icon: MapPinned, label: "المناطق والرسوم", path: "/admin/settings/zones", section: "الإعدادات" },

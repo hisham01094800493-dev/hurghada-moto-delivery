@@ -6,9 +6,9 @@ import { assertPaymentReceiptAccess, canEnterDriverOperations, validateDriverSta
 import { isCancellationReason } from "../shared/cancellation";
 import { buildDailyDeliveryReport } from "../shared/reporting";
 import { calculatePlatformCommission, defaultServicePricingRules, DeliveryServiceType, normalizeDriverCommissionPercent, normalizeServicePricingRules, ServicePricingRules } from "../shared/delivery";
-import { calculateAvailableWithdrawalBalance } from "../shared/driver-finance";
+import { calculateAvailableWithdrawalBalance, isDriverWalletBlocked } from "../shared/driver-finance";
 import { calculateCouponDiscount, normalizeCouponCode } from "../shared/coupons";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -248,7 +248,7 @@ export async function reviewDriverVerification(input: { driverId: number; status
   return getAdminDriverVerifications();
 }
 
-export async function getNewOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const driver = await getDriverById(driverId); if (!driver || driver.canAcceptOrders === 0 || driver.verificationStatus !== "approved" || driver.walletBalance <= -driver.walletCreditLimit) return []; const invitations = await db.select().from(driverOrderInvitations).where(and(eq(driverOrderInvitations.driverId, driverId), eq(driverOrderInvitations.status, "pending"))); const orderIds = invitations.filter((invitation) => invitation.expiresAt > new Date()).map((invitation) => invitation.orderId); if (!orderIds.length) return []; const orders = await db.select().from(deliveryOrders).where(and(inArray(deliveryOrders.id, orderIds), eq(deliveryOrders.status, "new"))).orderBy(desc(deliveryOrders.createdAt)); return orders.filter(canEnterDriverOperations); }
+export async function getNewOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const driver = await getDriverById(driverId); if (!driver || driver.canAcceptOrders === 0 || driver.verificationStatus !== "approved" || isDriverWalletBlocked(driver.walletBalance, driver.walletCreditLimit)) return []; const invitations = await db.select().from(driverOrderInvitations).where(and(eq(driverOrderInvitations.driverId, driverId), eq(driverOrderInvitations.status, "pending"))); const orderIds = invitations.filter((invitation) => invitation.expiresAt > new Date()).map((invitation) => invitation.orderId); if (!orderIds.length) return []; const orders = await db.select().from(deliveryOrders).where(and(inArray(deliveryOrders.id, orderIds), eq(deliveryOrders.status, "new"))).orderBy(desc(deliveryOrders.createdAt)); return orders.filter(canEnterDriverOperations); }
 
 export async function getOrdersForDriver(driverId: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); return db.select().from(deliveryOrders).where(eq(deliveryOrders.driverId, driverId)).orderBy(desc(deliveryOrders.createdAt)); }
 
@@ -275,13 +275,13 @@ export async function updateDeliveryStopStatus(stopId: number, driverId: number,
   return db.select().from(deliveryStops).where(eq(deliveryStops.orderId, order.id)).orderBy(deliveryStops.sequence);
 }
 
-export async function updateDriverAvailability(driverId: number, availability: "offline" | "online" | "busy" | "suspended") { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const driver = await getDriverById(driverId); if (!driver) throw new Error("ملف المندوب غير موجود."); if (availability === "online" && driver.verificationStatus !== "approved") throw new Error("لا يمكنك التفعيل قبل اعتماد مستندات الحساب من الإدارة."); if (availability === "online" && driver.canAcceptOrders === 0) throw new Error("صلاحية استقبال الطلبات غير مفعلة لحسابك."); if (availability === "online" && driver.walletBalance <= -driver.walletCreditLimit) throw new Error(`المحفظة متوقفة عند ${driver.walletBalance} ج.م. اشحنها أولًا بمبلغ يعيد الرصيد فوق الحد المسموح.`); await db.update(drivers).set({ availability }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
+export async function updateDriverAvailability(driverId: number, availability: "offline" | "online" | "busy" | "suspended") { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); const driver = await getDriverById(driverId); if (!driver) throw new Error("ملف المندوب غير موجود."); if (availability === "online" && driver.verificationStatus !== "approved") throw new Error("لا يمكنك التفعيل قبل اعتماد مستندات الحساب من الإدارة."); if (availability === "online" && driver.canAcceptOrders === 0) throw new Error("صلاحية استقبال الطلبات غير مفعلة لحسابك."); if (availability === "online" && isDriverWalletBlocked(driver.walletBalance, driver.walletCreditLimit)) throw new Error(`المحفظة متوقفة عند ${driver.walletBalance} ج.م. اشحنها أولًا بمبلغ يعيد الرصيد فوق الحد المسموح.`); await db.update(drivers).set({ availability }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
 export async function getDriverById(driverId: number) { const db = await getDb(); if (!db) return undefined; return (await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1))[0]; }
 export async function updateDriverLocation(driverId: number, latitude: number, longitude: number) { const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا."); await db.update(drivers).set({ lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: new Date() }).where(eq(drivers.id, driverId)); return getDriverById(driverId); }
 
 export async function acceptOrderForDriver(orderId: number, driverId: number, actorUserId: number) {
   const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
-  const driver = await getDriverById(driverId); if (!driver) throw new Error("ملف المندوب غير موجود."); if (driver.canAcceptOrders === 0) throw new Error("صلاحية قبول الطلبات غير مفعلة لحسابك."); if (driver.verificationStatus !== "approved") throw new Error("لا يمكنك قبول الطلب قبل اعتماد مستندات الحساب."); if (driver.walletBalance <= -driver.walletCreditLimit) throw new Error(`المحفظة متوقفة عند ${driver.walletBalance} ج.م. اشحنها أولًا بمبلغ يعيد الرصيد فوق الحد المسموح.`);
+  const driver = await getDriverById(driverId); if (!driver) throw new Error("ملف المندوب غير موجود."); if (driver.canAcceptOrders === 0) throw new Error("صلاحية قبول الطلبات غير مفعلة لحسابك."); if (driver.verificationStatus !== "approved") throw new Error("لا يمكنك قبول الطلب قبل اعتماد مستندات الحساب."); if (isDriverWalletBlocked(driver.walletBalance, driver.walletCreditLimit)) throw new Error(`المحفظة متوقفة عند ${driver.walletBalance} ج.م. اشحنها أولًا بمبلغ يعيد الرصيد فوق الحد المسموح.`);
   const target = (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
   if (!target || target.status !== "new") throw new Error("هذا الطلب لم يعد متاحًا.");
   if (!canEnterDriverOperations(target)) throw new Error("لا يمكن بدء التنفيذ قبل اعتماد الدفع.");
@@ -399,7 +399,7 @@ export async function getDriverWalletSummary(userId: number) {
     db.select().from(driverWalletTransactions).where(eq(driverWalletTransactions.driverId, driver.id)).orderBy(desc(driverWalletTransactions.createdAt)),
     db.select().from(driverWalletTopups).where(eq(driverWalletTopups.driverId, driver.id)).orderBy(desc(driverWalletTopups.createdAt)),
   ]);
-  return { driver, balance: driver.walletBalance, creditLimit: driver.walletCreditLimit, isBlocked: driver.walletBalance <= -driver.walletCreditLimit, transactions, topups };
+  return { driver, balance: driver.walletBalance, creditLimit: driver.walletCreditLimit, isBlocked: isDriverWalletBlocked(driver.walletBalance, driver.walletCreditLimit), transactions, topups };
 }
 
 export async function requestDriverWithdrawal(input: { userId: number; amount: number; note?: string }) {
@@ -686,4 +686,64 @@ export async function attachVodafonePaymentReceipt(orderId: number, userId: numb
   assertPaymentReceiptAccess(order, userId);
   await db.update(deliveryOrders).set({ paymentReceiptUrl: receiptUrl, paymentStatus: "verifying" }).where(eq(deliveryOrders.id, orderId));
   return (await db.select().from(deliveryOrders).where(eq(deliveryOrders.id, orderId)).limit(1))[0];
+}
+
+export async function createDriverWalletTopupInvoice(userId: number, amount: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  if (!Number.isInteger(amount) || amount < 10 || amount > 10000) throw new Error("اختر مبلغ شحن صحيحًا بين 10 و10000 ج.م.");
+  const driver = await getDriverByUserId(userId); if (!driver) throw new Error("لا يوجد ملف سائق مرتبط بهذا الحساب.");
+  const [account] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const merchantCode = process.env.FAWRY_MERCHANT_CODE; const secureKey = process.env.FAWRY_SECURE_KEY;
+  if (!merchantCode || !secureKey) throw new Error("لم تُضبط بيانات تاجر فوري بعد. اطلب من الإدارة إضافة Merchant Code وSecure Key.");
+  const merchantRefNum = String(Date.now()); const formattedAmount = amount.toFixed(2); const paymentMethod = "PayAtFawry";
+  const signature = createHash("sha256").update(`${merchantCode}${merchantRefNum}${driver.userId}${paymentMethod}${formattedAmount}${secureKey}`).digest("hex");
+  const response = await fetch(process.env.FAWRY_API_URL || "https://atfawry.fawrystaging.com/ECommerceWeb/Fawry/payments/charge", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ merchantCode, merchantRefNum, customerProfileId: driver.userId, paymentMethod, customerName: driver.displayName, customerMobile: driver.phone, customerEmail: account?.email || "no-reply@example.com", amount: formattedAmount, currencyCode: "EGP", language: "ar-eg", description: `شحن محفظة السائق ${driver.displayName}`, chargeItems: [{ itemId: `wallet-${driver.id}`, description: "شحن محفظة تشغيلية", price: formattedAmount, quantity: 1 }], signature }) });
+  if (!response.ok) throw new Error("تعذر إنشاء فاتورة فوري حاليًا.");
+  const result = await response.json() as { referenceNumber?: string; fawryRefNumber?: string; referenceNo?: string; type?: string };
+  const fawryRefNo = result.referenceNumber || result.fawryRefNumber || result.referenceNo; if (!fawryRefNo) throw new Error("لم يُرجع فوري كود دفع صالحًا.");
+  await db.insert(driverWalletTopups).values({ driverId: driver.id, merchantRefNum, fawryRefNo, amount, status: "pending", expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+  return { merchantRefNum, fawryRefNo, amount, status: "pending" as const, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) };
+}
+
+export async function getAdminDriverWallets() {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const driverRows = await db.select().from(drivers).orderBy(desc(drivers.updatedAt));
+  return Promise.all(driverRows.map(async (driver) => {
+    const [orders, transactions, topups] = await Promise.all([
+      db.select().from(deliveryOrders).where(and(eq(deliveryOrders.driverId, driver.id), eq(deliveryOrders.status, "delivered"))).orderBy(desc(deliveryOrders.deliveredAt)),
+      db.select().from(driverWalletTransactions).where(eq(driverWalletTransactions.driverId, driver.id)).orderBy(desc(driverWalletTransactions.createdAt)),
+      db.select().from(driverWalletTopups).where(eq(driverWalletTopups.driverId, driver.id)).orderBy(desc(driverWalletTopups.createdAt)),
+    ]);
+    return { driver, orders, transactions, topups, isBlocked: isDriverWalletBlocked(driver.walletBalance, driver.walletCreditLimit) };
+  }));
+}
+
+export async function setDriversCommissionPercent(driverIds: number[], commissionPercent: number) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const ids = Array.from(new Set(driverIds.filter((id) => Number.isInteger(id) && id > 0)));
+  if (!ids.length || ids.length > 100) throw new Error("اختر سائقًا واحدًا أو مجموعة لا تتجاوز 100 سائق.");
+  if (!Number.isFinite(commissionPercent)) throw new Error("أدخل نسبة عمولة صحيحة.");
+  const normalized = normalizeDriverCommissionPercent(commissionPercent);
+  await db.update(drivers).set({ commissionPercent: normalized }).where(inArray(drivers.id, ids));
+  return getAdminDriverWallets();
+}
+
+export async function handleFawryWalletCallback(input: { fawryRefNo: string; merchantRefNum: string; orderStatus: string; amount: string; messageSignature: string }) {
+  const db = await getDb(); if (!db) throw new Error("قاعدة البيانات غير متاحة حاليًا.");
+  const secureKey = process.env.FAWRY_SECURE_KEY; if (!secureKey) throw new Error("بيانات فوري غير مكتملة.");
+  const amount = Number(input.amount); if (!Number.isFinite(amount)) throw new Error("قيمة فاتورة غير صحيحة.");
+  const expectedSignature = createHash("md5").update(`${secureKey}${amount.toFixed(2)}${input.fawryRefNo}${input.merchantRefNum}${input.orderStatus}`).digest("hex");
+  if (expectedSignature.toLowerCase() !== input.messageSignature.trim().toLowerCase()) throw new Error("توقيع إشعار فوري غير صالح.");
+  const [topup] = await db.select().from(driverWalletTopups).where(eq(driverWalletTopups.merchantRefNum, input.merchantRefNum)).limit(1);
+  if (!topup || topup.fawryRefNo !== input.fawryRefNo || topup.amount !== Math.round(amount)) throw new Error("الفاتورة غير موجودة أو قيمة الدفع لا تطابق الطلب.");
+  if (input.orderStatus.toUpperCase() !== "PAID") {
+    const mappedStatus = input.orderStatus.toUpperCase() === "EXPIRED" ? "expired" : input.orderStatus.toUpperCase() === "CANCELED" ? "cancelled" : "failed";
+    await db.update(driverWalletTopups).set({ status: mappedStatus }).where(and(eq(driverWalletTopups.id, topup.id), eq(driverWalletTopups.status, "pending")));
+    return { accepted: true, credited: false, status: mappedStatus } as const;
+  }
+  const changed = await db.update(driverWalletTopups).set({ status: "paid", paidAt: new Date() }).where(and(eq(driverWalletTopups.id, topup.id), eq(driverWalletTopups.status, "pending"))) as any;
+  if (!changed[0]?.affectedRows) return { accepted: true, credited: false, status: "paid" } as const;
+  await db.update(drivers).set({ walletBalance: sql`${drivers.walletBalance} + ${topup.amount}` }).where(eq(drivers.id, topup.driverId));
+  const driver = await getDriverById(topup.driverId); if (driver) await db.insert(driverWalletTransactions).values({ driverId: driver.id, topupId: topup.id, type: "wallet_topup", amount: topup.amount, balanceAfter: driver.walletBalance, description: `شحن محفظة عبر فوري بكود ${topup.fawryRefNo}` });
+  return { accepted: true, credited: true, status: "paid" } as const;
 }
